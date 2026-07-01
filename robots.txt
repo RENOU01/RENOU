@@ -1,6 +1,6 @@
 User-agent: *
 Allow: /
 Disallow: /panel
-Disallow: /.netlify/
+Disallow: /.github/
 
-Sitemap: https://renou.netlify.app/sitemap.xml
+Sitemap: https://renou01.github.io/RENOU/sitemap.xml
