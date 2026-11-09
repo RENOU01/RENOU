@@ -1,23 +1,43 @@
+
 name: Supabase Keep-Alive
 
 on:
   schedule:
-    - cron: '0 10 */5 * *'  # Cada 5 dias a las 10am UTC
-  workflow_dispatch:        # Permite ejecutarlo manualmente
+    - cron: '17 10,22 * * *'
+  workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Ping Supabase para evitar pausa
+      - name: Consultar actividad real de Supabase
+        env:
+          SUPABASE_URL: https://utpgxsierjklrqnexeqt.supabase.co
+          SUPABASE_KEY: sb_publishable_9pLLVw8YfmUq1n0ll7fi2Q_Emtpc90e
+
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://utpgxsierjklrqnexeqt.supabase.co/rest/v1/avistamientos_publicos?select=id&limit=1" \
-            -H "apikey: sb_publishable_9pLLVw8YfmUq1n0ll7fi2Q_Emtpc90e" \
-            -H "Authorization: Bearer sb_publishable_9pLLVw8YfmUq1n0ll7fi2Q_Emtpc90e")
+          set -euo pipefail
+
+          STATUS=$(curl \
+            --silent \
+            --show-error \
+            --location \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 10 \
+            --output /tmp/supabase-response.txt \
+            --write-out "%{http_code}" \
+            "$SUPABASE_URL/rest/v1/avistamientos_publicos?select=id&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
           echo "HTTP Status: $STATUS"
-          if [ "$STATUS" = "200" ]; then
-            echo "Ping exitoso - Supabase activo"
+          cat /tmp/supabase-response.txt
+
+          if [[ "$STATUS" =~ ^2[0-9][0-9]$ ]]; then
+            echo "Keep-Alive correcto: consulta a PostgreSQL ejecutada."
           else
-            echo "Advertencia: respuesta inesperada $STATUS"
+            echo "ERROR: Supabase respondió con HTTP $STATUS"
+            exit 1
           fi
