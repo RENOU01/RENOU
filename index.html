@@ -2198,15 +2198,21 @@ async function eliminarMediaCaso(indice){
     const storagePath=decodeURIComponent(u.pathname.slice(pos+marker.length));
     if(!storagePath.startsWith(String(editingId)+'/'))throw new Error('El archivo no corresponde a este caso. Se canceló la eliminación.');
     const restantes=urls.filter((_,i)=>i!==indice);
-    const{error}=await sb.rpc('panel_actualizar_caso',{p_id:editingId,p_payload:{media_urls:restantes}});
-    if(error)throw error;
+    // RPC específica y autorizada: panel_actualizar_caso no contempla media_urls.
+    const{error:dbError}=await sb.rpc('panel_quitar_media',{p_id:editingId,p_urls:restantes});
+    if(dbError)throw new Error('No se pudo actualizar la lista de archivos del caso: '+dbError.message);
     const{error:storageError}=await sb.storage.from('renou-media').remove([storagePath]);
+    if(storageError){
+      // Revierte la lista si Storage rechazó el borrado físico.
+      const{error:rollbackError}=await sb.rpc('panel_quitar_media',{p_id:editingId,p_urls:urls});
+      const extra=rollbackError?' Además, no se pudo restaurar la lista original: '+rollbackError.message:'';
+      throw new Error('Supabase Storage no permitió eliminar el archivo: '+storageError.message+extra);
+    }
     await registrarLog('eliminar_multimedia',editingId,'Archivo eliminado: '+storagePath.split('/').pop());
     await loadPanelData();
     await loadDB();
     await openEdit(editingId);
-    if(storageError)toast('Se desvinculó del caso, pero no se pudo borrar del almacenamiento: '+storageError.message,true);
-    else toast('Archivo multimedia eliminado.');
+    toast('Archivo multimedia eliminado correctamente.');
   }catch(e){
     const msg=document.getElementById('edit-msg');
     if(msg){msg.style.color='#FF4136';msg.textContent='Error al eliminar el archivo: '+(e.message||'fallo desconocido');}
