@@ -2148,7 +2148,7 @@ async function cargarInvestigadoresAsignables(seleccionado=''){
   if(!sel)return;
   sel.innerHTML='<option value="">Cargando personal...</option>';
   try{
-    const{data,error}=await sb.from('investigadores').select('nombre').eq('activo',true).order('nombre',{ascending:true});
+    const{data,error}=await sb.from('investigadores').select('nombre').order('nombre',{ascending:true});
     if(error)throw error;
     const nombres=[...new Set((data||[]).map(x=>(x.nombre||'').trim()).filter(Boolean))];
     if(seleccionado&&!nombres.includes(seleccionado))nombres.unshift(seleccionado);
