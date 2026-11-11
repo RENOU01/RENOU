@@ -179,7 +179,7 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
 .cc-meta{font-size:11px;color:#8BA3BC;display:flex;gap:12px;flex-wrap:wrap}
 .cc-cls{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:1px;color:#7AB8F5;padding:2px 7px;border:1px solid rgba(122,184,245,.2);border-radius:2px}
 .has-media{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#7AB8F5;margin-left:auto}
-.modal-ov{display:none;position:fixed;inset:0;background:rgba(13,31,48,.92);z-index:2000;overflow-y:auto;padding:2rem 1rem}
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(13,31,48,.92);z-index:4000;overflow-y:auto;padding:2rem 1rem}
 .modal-ov.open{display:flex;align-items:flex-start;justify-content:center}
 .modal{background:#16314A;border:1px solid rgba(57,255,20,.22);border-radius:10px;padding:1.5rem;max-width:620px;width:100%;position:relative}
 .modal-close{position:absolute;top:13px;right:13px;background:none;border:none;color:#8BA3BC;font-size:19px;line-height:1}
@@ -1273,7 +1273,7 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
       <div class="field"><label>Latitud</label><input type="number" step="0.0001" id="ed-lat"></div>
       <div class="field"><label>Longitud</label><input type="number" step="0.0001" id="ed-lon"></div>
       <div class="field" style="grid-column:1/-1"><label>Descripción</label><textarea id="ed-desc" rows="4"></textarea></div>
-      <div class="field"><label>Investigador asignado</label><input type="text" id="ed-investigador" placeholder="Nombre del investigador"></div>
+      <div class="field"><label>Investigador asignado</label><select id="ed-investigador"><option value="">Sin asignar</option></select></div>
       <div class="field" style="grid-column:1/-1"><label>Link de video YouTube (opcional)</label><input type="url" id="ed-video-link" placeholder="https://youtube.com/watch?v=..." oninput="previewVideoEdicion()"><div class="field-hint">Pegá el enlace y se mostrará una vista previa aquí. El video aparecerá en la ficha pública cuando el caso esté publicado y la base pública conserve el campo video_link.</div><div id="ed-video-preview" style="display:none;margin-top:10px"></div></div>
       <div class="field" style="grid-column:1/-1"><label>Observaciones internas (solo RENOU)</label><textarea id="ed-obs" rows="3" placeholder="Notas de seguimiento, contacto realizado, etc."></textarea></div>
     </div>
@@ -2072,7 +2072,7 @@ async function loadPanelData(){
   try{
     const{data,error}=await sb.from('avistamientos').select('*').order('created_at',{ascending:false});
     if(error)throw error;
-    panelData=data||[];
+    panelData=(data||[]).map(normalizarCaso);
   }catch(e){
     toast('Error cargando casos: '+(e.message||''),true);
     panelData=[];
@@ -2143,6 +2143,77 @@ function renderPanelTable(){
   }).join('');
 }
 
+async function cargarInvestigadoresAsignables(seleccionado=''){
+  const sel=document.getElementById('ed-investigador');
+  if(!sel)return;
+  sel.innerHTML='<option value="">Cargando personal...</option>';
+  try{
+    const{data,error}=await sb.from('investigadores').select('nombre').eq('activo',true).order('nombre',{ascending:true});
+    if(error)throw error;
+    const nombres=[...new Set((data||[]).map(x=>(x.nombre||'').trim()).filter(Boolean))];
+    if(seleccionado&&!nombres.includes(seleccionado))nombres.unshift(seleccionado);
+    sel.innerHTML='<option value="">Sin asignar</option>'+nombres.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('');
+    sel.value=seleccionado||'';
+  }catch(e){
+    sel.innerHTML='<option value="">No se pudo cargar el personal</option>';
+    if(seleccionado)sel.insertAdjacentHTML('beforeend','<option value="'+esc(seleccionado)+'">'+esc(seleccionado)+'</option>');
+    sel.value=seleccionado||'';
+    console.error('RENOU: no se pudo cargar la lista de investigadores:',e);
+  }
+}
+
+function renderEditMedia(urls){
+  const mediaEl=document.getElementById('edit-media-list');
+  if(!urls||!urls.length){
+    mediaEl.innerHTML='<p style="font-size:12px;color:#8BA3BC;grid-column:1/-1">Sin archivos adjuntos.</p>';
+    return;
+  }
+  const puedeQuitar=puedeEditar();
+  mediaEl.innerHTML=urls.map((u,i)=>{
+    const su=escUrl(u);
+    let contenido='';
+    if(/\.(mp4|webm|mov|avi|mkv)(?:$|[?#])/i.test(u))contenido='<video src="'+su+'" controls></video>';
+    else if(/\.(mp3|wav|m4a)(?:$|[?#])/i.test(u))contenido='<div style="padding:.75rem;text-align:center"><audio src="'+su+'" controls style="width:100%"></audio></div>';
+    else if(/\.pdf(?:$|[?#])/i.test(u))contenido='<div style="padding:1rem;text-align:center"><a href="'+su+'" target="_blank" rel="noopener noreferrer" style="font-size:24px">&#128196;<div style="font-size:10px;color:#7AB8F5;margin-top:5px">Ver PDF</div></a></div>';
+    else contenido='<a href="'+su+'" target="_blank" rel="noopener noreferrer"><img src="'+su+'" loading="lazy" alt="Archivo adjunto"></a>';
+    return '<div class="mm-item" style="position:relative">'+contenido+
+      (puedeQuitar?'<button type="button" class="act-btn act-delete" style="min-width:0;width:100%;padding:7px;font-size:10px;border-radius:0" onclick="eliminarMediaCaso('+i+')">Eliminar archivo</button>':'')+
+      '</div>';
+  }).join('');
+}
+
+async function eliminarMediaCaso(indice){
+  const d=panelData.find(x=>x.id===editingId);
+  if(!d)return;
+  const urls=Array.isArray(d.media_urls)?d.media_urls:[];
+  if(indice<0||indice>=urls.length)return;
+  if(!puedeEditar()){toast('Tu rol no permite eliminar archivos.',true);return;}
+  if(!confirm('Eliminar este archivo multimedia del caso? Esta acción no se puede deshacer.'))return;
+  const url=urls[indice];
+  try{
+    const u=new URL(url);
+    const marker='/storage/v1/object/public/renou-media/';
+    const pos=u.pathname.indexOf(marker);
+    if(pos<0)throw new Error('La URL no pertenece al bucket de evidencias RENOU.');
+    const storagePath=decodeURIComponent(u.pathname.slice(pos+marker.length));
+    if(!storagePath.startsWith(String(editingId)+'/'))throw new Error('El archivo no corresponde a este caso. Se canceló la eliminación.');
+    const restantes=urls.filter((_,i)=>i!==indice);
+    const{error}=await sb.rpc('panel_actualizar_caso',{p_id:editingId,p_payload:{media_urls:restantes}});
+    if(error)throw error;
+    const{error:storageError}=await sb.storage.from('renou-media').remove([storagePath]);
+    await registrarLog('eliminar_multimedia',editingId,'Archivo eliminado: '+storagePath.split('/').pop());
+    await loadPanelData();
+    await loadDB();
+    await openEdit(editingId);
+    if(storageError)toast('Se desvinculó del caso, pero no se pudo borrar del almacenamiento: '+storageError.message,true);
+    else toast('Archivo multimedia eliminado.');
+  }catch(e){
+    const msg=document.getElementById('edit-msg');
+    if(msg){msg.style.color='#FF4136';msg.textContent='Error al eliminar el archivo: '+(e.message||'fallo desconocido');}
+    else toast('Error al eliminar el archivo: '+(e.message||''),true);
+  }
+}
+
 function previewVideoEdicion(){
   const input=document.getElementById('ed-video-link');
   const box=document.getElementById('ed-video-preview');
@@ -2155,7 +2226,7 @@ function previewVideoEdicion(){
   box.innerHTML='<div style="font-size:11px;color:#39FF14;margin-bottom:6px">VISTA PREVIA DEL VIDEO</div><div style="position:relative;width:100%;max-width:560px;aspect-ratio:16/9;background:#000"><iframe src="https://www.youtube-nocookie.com/embed/'+id+'?enablejsapi=1" title="Vista previa del video" style="position:absolute;inset:0;width:100%;height:100%;border:0" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe></div>';
 }
 
-function openEdit(id){
+async function openEdit(id){
   const d=panelData.find(x=>x.id===id);if(!d)return;
   editingId=id;
   document.getElementById('edit-title').textContent=d.id;
@@ -2191,19 +2262,8 @@ function openEdit(id){
     '<div style="display:flex;gap:10px;padding:3px 0"><span style="min-width:160px;color:#7AB8F5">'+esc(k)+':</span><span style="color:#E8F4FD">'+esc(v)+'</span></div>'
   ).join('');
 
-  const mediaEl=document.getElementById('edit-media-list');
   const urls=d.media_urls||[];
-  if(!urls.length){
-    mediaEl.innerHTML='<p style="font-size:12px;color:#8BA3BC;grid-column:1/-1">Sin archivos adjuntos.</p>';
-  }else{
-    mediaEl.innerHTML=urls.map(u=>{
-      const su=escUrl(u);
-      if(u.match(/\.(mp4|webm|mov|avi|mkv)/i))return '<div class="mm-item"><video src="'+su+'" controls></video></div>';
-      if(u.match(/\.(mp3|wav|m4a)/i))return '<div class="mm-item" style="padding:.75rem;text-align:center"><audio src="'+su+'" controls style="width:100%"></audio></div>';
-      if(u.match(/\.pdf/i))return '<div class="mm-item" style="padding:1rem;text-align:center"><a href="'+su+'" target="_blank" rel="noopener noreferrer" style="font-size:24px">&#128196;<div style="font-size:10px;color:#7AB8F5;margin-top:5px">Ver PDF</div></a></div>';
-      return '<a href="'+su+'" target="_blank" rel="noopener noreferrer" class="mm-item"><img src="'+su+'" loading="lazy"></a>';
-    }).join('');
-  }
+  renderEditMedia(urls);
 
   // Metadatos técnicos: solo Analista, Coordinador y Administrador
   const puedeVerMeta=['Analista','Coordinador','Administrador'].includes(panelRol);
@@ -2239,8 +2299,8 @@ function openEdit(id){
   document.getElementById('ed-c1').value=d.C1||'';
   document.getElementById('ed-lat').value=d.lat||'';
   document.getElementById('ed-lon').value=d.lon||'';
-  document.getElementById('ed-desc').value=d.descripción||'';
-  document.getElementById('ed-investigador').value=d.investigador||'';
+  document.getElementById('ed-desc').value=d.descripción||d.descripcion||d.description||'';
+  await cargarInvestigadoresAsignables(d.investigador||'');
   document.getElementById('ed-video-link').value=d.video_link||'';
   previewVideoEdicion();
   document.getElementById('ed-obs').value=d.observaciones_internas||'';
