@@ -3094,7 +3094,7 @@ async function leerYValidarBackup(file){
   if(!file)throw new Error('No se seleccionó ningún archivo.');
   if(file.size>100*1024*1024)throw new Error('El archivo supera 100 MB. Dividí el backup antes de intentar restaurarlo.');
   const parsed=JSON.parse(await file.text());
-  const esCompleto=parsed&&['RENOU_BACKUP_COMPLETO_V2','RENOU_BACKUP_COMPLETO_V3'].includes(parsed.formato)&&parsed.tablas&&typeof parsed.tablas==='object';
+  const esCompleto=parsed&&['RENOU_BACKUP_COMPLETO_V2','RENOU_BACKUP_COMPLETO_V3','RENOU_BACKUP_INTEGRAL_V4'].includes(parsed.formato)&&parsed.tablas&&typeof parsed.tablas==='object';
   const tablas=esCompleto?parsed.tablas:{avistamientos:Array.isArray(parsed)?parsed:null};
   const nombres=['avistamientos','avistamientos_publicos','avistamientos_audip'];
   const disponibles=nombres.filter(n=>Array.isArray(tablas[n]));
@@ -3137,7 +3137,7 @@ async function restaurarBackup(){
   try{
     const info=await leerYValidarBackup(fileEl.files[0]);
     const resumenPrevio=info.disponibles.map(n=>n+': '+info.conteos[n]).join(' · ');
-    const binarios='\n\nImportante: este JSON conserva las URLs de los adjuntos, pero no contiene los archivos binarios de Storage.';
+    const binarios=info.parsed.formato==='RENOU_BACKUP_INTEGRAL_V4'?'\n\nEste V4 contiene archivos binarios de Storage y tablas auxiliares, pero el restaurador actual solo reingresa las tres tablas principales. Los binarios y tablas auxiliares deberán recuperarse por separado.':'\n\nImportante: este JSON conserva las URLs de los adjuntos, pero no contiene los archivos binarios de Storage.';
     const avisoParcial='\n\nLa restauración se ejecuta registro por registro. Si ocurre un error, algunos registros podrían quedar restaurados y otros no. No se eliminan registros ausentes del archivo.';
     if(!confirm('Archivo validado. Se intentarán restaurar estos registros:\n'+resumenPrevio+'\n\nTotal: '+info.total+'. Los IDs existentes serán actualizados y los nuevos insertados.'+binarios+avisoParcial+'\n\n¿Continuar?')){msg.textContent='Restauración cancelada. No se modificó la base de datos.';return;}
     restauracionEnCurso=true;
