@@ -3030,13 +3030,30 @@ async function descargarBackup(formato){
   const msg=document.getElementById('backup-msg');
   if(backupEnCurso){msg.textContent='Ya hay una operación de backup en curso.';return;}
   if(!sb||!isCfg){msg.style.color='#FF4136';msg.textContent='No hay conexión activa con Supabase. No se generó ningún archivo.';return;}
-  if(formato!=='json'){msg.style.color='#FFC832';msg.textContent='El CSV es solo una exportación tabular y no conserva adjuntos. Para el respaldo integral usá JSON.';return;}
+  if(formato!=='json'&&formato!=='csv'){msg.style.color='#FF4136';msg.textContent='Formato no reconocido.';return;}
   backupEnCurso=true;msg.style.color='#8BA3BC';msg.textContent='Iniciando respaldo integral...';
   const estado=t=>{msg.textContent=t;};
   try{
     const nombres=['avistamientos','avistamientos_publicos','avistamientos_audip','investigadores','agrupaciones','actividad_log'];
     const tablas={};
     for(const nombre of nombres){estado('Exportando tabla '+nombre+'...');tablas[nombre]=await obtenerTablaCompleta(nombre);}
+    if(formato==='csv'){
+      const filas=[];const conjunto=new Set(['__tabla']);
+      for(const [nombre,registros] of Object.entries(tablas))for(const r of registros)Object.keys(r).forEach(k=>conjunto.add(k));
+      const columnas=Array.from(conjunto);
+      filas.push(columnas.map(valorCSV).join(','));
+      for(const [nombre,registros] of Object.entries(tablas))for(const r of registros)filas.push(columnas.map(k=>k==='__tabla'?valorCSV(nombre):valorCSV(r[k])).join(','));
+      const contenido='\\uFEFF'+filas.join('\\r\\n');
+      const blob=new Blob([contenido],{type:'text/csv;charset=utf-8;'});
+      const filename='renou-export-tablas-'+new Date().toISOString().slice(0,10)+'.csv';
+      const url=URL.createObjectURL(blob);const a=document.createElement('a');
+      a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),3000);
+      msg.style.color='#39FF14';
+      msg.textContent='CSV generado: '+filename+' · '+nombres.map(n=>n+': '+tablas[n].length).join(' · ')+'. No incluye archivos binarios de Storage; usá el backup integral V4 para eso.';
+      try{await registrarLog('backup',null,'CSV de tablas: '+nombres.map(n=>n+':'+tablas[n].length).join(', '));}catch(e){console.warn('No se pudo registrar auditoría del CSV:',e);}
+      return;
+    }
     const buckets=['renou-media','renou-perfiles'];const storage={};
     for(const bucket of buckets){estado('Inventariando archivos de '+bucket+'...');storage[bucket]=await exportarStorage(bucket,estado);}
     const bytesStorage=Object.values(storage).flat().reduce((n,a)=>n+(Number(a.size_bytes)||0),0);
