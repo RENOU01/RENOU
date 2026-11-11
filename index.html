@@ -1013,7 +1013,7 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
           <button class="btn-back" id="tab-invest-btn" onclick="switchPanelTab('invest')" style="display:none">INVESTIGADORES</button>
           <button class="btn-back" id="tab-agrup-btn" onclick="switchPanelTab('agrup')" style="display:none;border-color:rgba(57,255,20,.3);color:#39FF14">AGRUPACIONES</button>
           <button class="btn-back" id="tab-log-btn" onclick="switchPanelTab('log')" style="display:none;border-color:rgba(122,184,245,.4);color:#7AB8F5">ACTIVIDAD</button>
-          <button class="btn-back" id="tab-backup-btn" onclick="switchPanelTab('backup')" style="display:none;border-color:rgba(255,200,50,.4);color:#FFC832">BACKUP</button>
+          <button class="btn-back" id="tab-backup-btn" onclick="switchPanelTab('backup')" style="border-color:rgba(255,200,50,.4);color:#FFC832">BACKUP</button>
           <button class="btn-back" onclick="doLogout()" style="border-color:rgba(255,65,54,.4);color:#FF8478">CERRAR SESION</button>
         </div>
       </div>
@@ -2000,6 +2000,8 @@ function puedeEliminar(){return ['Coordinador','Administrador'].includes(panelRo
 function puedeGestiónar(){return panelIsAdmin;}
 
 function switchPanelTab(tab){
+  if(tab==='backup'&&!panelIsAdmin){alert('Acceso restringido: el backup integral solo está disponible para cuentas con permiso de Administrador. Solicitá que se habilite es_admin en tu registro de investigadores.');return;}
+  if(['invest','agrup','log'].includes(tab)&&!panelIsAdmin){alert('Esta sección está disponible únicamente para administradores.');return;}
   ['casos','invest','agrup','log','backup'].forEach(t=>{
     const el=document.getElementById('tab-'+t);
     if(el)el.style.display=tab===t?'block':'none';
@@ -3028,6 +3030,7 @@ async function exportarStorage(bucket,estado){
 let backupEnCurso=false;
 async function descargarBackup(formato){
   const msg=document.getElementById('backup-msg');
+  if(!panelIsAdmin){if(msg){msg.style.color='#FF4136';msg.textContent='Acceso denegado: tu cuenta no tiene permisos de Administrador.';}return;}
   if(backupEnCurso){msg.textContent='Ya hay una operación de backup en curso.';return;}
   if(!sb||!isCfg){msg.style.color='#FF4136';msg.textContent='No hay conexión activa con Supabase. No se generó ningún archivo.';return;}
   if(formato!=='json'&&formato!=='csv'){msg.style.color='#FF4136';msg.textContent='Formato no reconocido.';return;}
