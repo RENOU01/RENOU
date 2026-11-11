@@ -1064,10 +1064,10 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
         <!-- BACKUP -->
         <div style="background:#16314A;border:1px solid rgba(57,255,20,.15);border-radius:8px;padding:1.5rem;margin-top:.5rem">
           <h3 style="font-size:13px;color:#39FF14;font-family:'Orbitron',monospace;letter-spacing:1px;margin-bottom:.75rem">&#128190; BACKUP COMPLETO</h3>
-          <p style="font-size:12px;color:#8BA3BC;margin-bottom:1rem">Exporta los registros de las tres tablas (incluidos campos internos y URLs de adjuntos). Los archivos binarios de Storage no se descargan aquí y requieren un respaldo separado. Antes de restaurar, conserva una copia independiente del backup actual.</p>
+          <p style="font-size:12px;color:#8BA3BC;margin-bottom:1rem">Exporta seis tablas de RENOU y descarga también los archivos binarios de los buckets renou-media y renou-perfiles. Incluye un inventario y controles de integridad SHA-256. No incluye usuarios Auth, esquema SQL, funciones RPC ni políticas RLS; no sustituye el backup nativo de PostgreSQL.</p>
           <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="act-btn act-publish" onclick="descargarBackup('json')" style="min-width:160px">&#128190; Descargar JSON completo</button>
-            <button class="act-btn act-archive" onclick="descargarBackup('csv')" style="min-width:160px">&#128190; Descargar CSV completo</button>
+            <button class="act-btn act-publish" onclick="descargarBackup('json')" style="min-width:160px">&#128190; Descargar backup integral V4</button>
+            <button class="act-btn act-archive" onclick="descargarBackup('csv')" style="min-width:160px">&#128190; Descargar CSV (solo tablas)</button>
           </div>
           <div id="backup-msg" style="font-size:12px;margin-top:.75rem;color:#8BA3BC"></div>
         </div>
@@ -2963,12 +2963,12 @@ function initKeepAlive(){
   return;
 }
 
-// BACKUP COMPLETO
+// BACKUP INTEGRAL V4 — tablas de la aplicación + archivos binarios de Storage.
 async function obtenerTablaCompleta(nombreTabla){
   if(!sb)throw new Error('No hay una conexión activa con Supabase.');
-  const salida=[];const tam=1000;let desde=0;
+  const salida=[];const tam=500;let desde=0;
   while(true){
-    const{data,error}=await sb.from(nombreTabla).select('*').order('created_at',{ascending:false}).order('id',{ascending:true}).range(desde,desde+tam-1);
+    const{data,error}=await sb.from(nombreTabla).select('*').order('id',{ascending:true}).range(desde,desde+tam-1);
     if(error)throw new Error('Tabla '+nombreTabla+': '+error.message);
     const bloque=data||[];salida.push(...bloque);
     if(bloque.length<tam)break;
@@ -2981,44 +2981,112 @@ function valorCSV(v){
   const texto=(typeof v==='object')?JSON.stringify(v):String(v);
   return '"'+texto.replace(/"/g,'""')+'"';
 }
+function bytesABase64(buffer){
+  const bytes=new Uint8Array(buffer);let binario='';
+  const bloque=0x8000;
+  for(let i=0;i<bytes.length;i+=bloque)binario+=String.fromCharCode(...bytes.subarray(i,Math.min(i+bloque,bytes.length)));
+  return btoa(binario);
+}
+async function sha256Blob(blob){
+  const hash=await crypto.subtle.digest('SHA-256',await blob.arrayBuffer());
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function listarArchivosBucket(bucket){
+  const archivos=[];const pendientes=[''];const vistos=new Set();
+  while(pendientes.length){
+    const carpeta=pendientes.shift();
+    if(vistos.has(carpeta))continue;vistos.add(carpeta);
+    let offset=0;
+    while(true){
+      const{data,error}=await sb.storage.from(bucket).list(carpeta,{limit:100,offset,sortBy:{column:'name',order:'asc'}});
+      if(error)throw new Error('Storage '+bucket+(carpeta?'/'+carpeta:'')+': '+error.message);
+      const items=data||[];
+      for(const item of items){
+        const ruta=carpeta?carpeta+'/'+item.name:item.name;
+        if(item.id===null||item.metadata===null){pendientes.push(ruta);}
+        else archivos.push({path:ruta,metadata:item.metadata||{},updated_at:item.updated_at||null,created_at:item.created_at||null});
+      }
+      if(items.length<100)break;
+      offset+=items.length;
+    }
+  }
+  return archivos;
+}
+async function exportarStorage(bucket,estado){
+  const lista=await listarArchivosBucket(bucket);const salida=[];
+  for(let i=0;i<lista.length;i++){
+    const item=lista[i];
+    estado('Descargando Storage '+bucket+': '+(i+1)+'/'+lista.length+' — '+item.path);
+    const{data,error}=await sb.storage.from(bucket).download(item.path);
+    if(error)throw new Error('No se pudo descargar '+bucket+'/'+item.path+': '+error.message);
+    if(!data)throw new Error('Storage no devolvió contenido para '+bucket+'/'+item.path+'.');
+    const sha256=await sha256Blob(data);
+    salida.push({path:item.path,size_bytes:data.size,content_type:data.type||item.metadata.mimetype||'application/octet-stream',sha256_base64:bytesABase64(await data.arrayBuffer()),sha256,created_at:item.created_at,updated_at:item.updated_at});
+  }
+  return salida;
+}
 let backupEnCurso=false;
 async function descargarBackup(formato){
   const msg=document.getElementById('backup-msg');
   if(backupEnCurso){msg.textContent='Ya hay una operación de backup en curso.';return;}
   if(!sb||!isCfg){msg.style.color='#FF4136';msg.textContent='No hay conexión activa con Supabase. No se generó ningún archivo.';return;}
-  backupEnCurso=true;msg.style.color='#8BA3BC';msg.textContent='Preparando backup de las tres tablas...';
+  if(formato!=='json'){msg.style.color='#FFC832';msg.textContent='El CSV es solo una exportación tabular y no conserva adjuntos. Para el respaldo integral usá JSON.';return;}
+  backupEnCurso=true;msg.style.color='#8BA3BC';msg.textContent='Iniciando respaldo integral...';
+  const estado=t=>{msg.textContent=t;};
   try{
-    const nombres=['avistamientos','avistamientos_publicos','avistamientos_audip'];
+    const nombres=['avistamientos','avistamientos_publicos','avistamientos_audip','investigadores','agrupaciones','actividad_log'];
     const tablas={};
-    for(const nombre of nombres){msg.textContent='Exportando '+nombre+'...';tablas[nombre]=await obtenerTablaCompleta(nombre);}
-    if(nombres.some(n=>!Array.isArray(tablas[n])))throw new Error('La exportación no devolvió las tres tablas.');
-    const total=Object.values(tablas).reduce((n,filas)=>n+filas.length,0);
+    for(const nombre of nombres){estado('Exportando tabla '+nombre+'...');tablas[nombre]=await obtenerTablaCompleta(nombre);}
+    const buckets=['renou-media','renou-perfiles'];const storage={};
+    for(const bucket of buckets){estado('Inventariando archivos de '+bucket+'...');storage[bucket]=await exportarStorage(bucket,estado);}
+    const bytesStorage=Object.values(storage).flat().reduce((n,a)=>n+(Number(a.size_bytes)||0),0);
+    if(bytesStorage>150*1024*1024)throw new Error('Los archivos de Storage suman '+(bytesStorage/1024/1024).toFixed(1)+' MB. Superan el límite seguro de 150 MB para generar un único JSON desde el navegador. No se descargó un backup parcial.');
+    const principales=['avistamientos','avistamientos_publicos','avistamientos_audip'];
     const conteos=Object.fromEntries(nombres.map(n=>[n,tablas[n].length]));
-    let contenido,filename,type;
-    if(formato==='json'){
-      const backup={formato:'RENOU_BACKUP_COMPLETO_V3',exportado_en:new Date().toISOString(),total_registros:total,conteos,tablas};
-      contenido=JSON.stringify(backup,null,2);
-      filename='renou-backup-completo-'+new Date().toISOString().substring(0,10)+'.json';
-      type='application/json;charset=utf-8';
-    }else if(formato==='csv'){
-      const filas=[];const conjunto=new Set(['__tabla']);
-      for(const [nombre,registros] of Object.entries(tablas))for(const r of registros)Object.keys(r).forEach(k=>conjunto.add(k));
-      const columnas=Array.from(conjunto);
-      filas.push(columnas.map(valorCSV).join(','));
-      for(const [nombre,registros] of Object.entries(tablas))for(const r of registros)filas.push(columnas.map(k=>k==='__tabla'?valorCSV(nombre):valorCSV(r[k])).join(','));
-      contenido='\uFEFF'+filas.join('\r\n');
-      filename='renou-backup-completo-'+new Date().toISOString().substring(0,10)+'.csv';
-      type='text/csv;charset=utf-8;';
-    }else throw new Error('Formato de backup no reconocido.');
-    const blob=new Blob([contenido],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');
+    const totalPrincipal=principales.reduce((n,k)=>n+tablas[k].length,0);
+    const totalTablas=nombres.reduce((n,k)=>n+tablas[k].length,0);
+    const backup={
+      formato:'RENOU_BACKUP_INTEGRAL_V4',
+      exportado_en:new Date().toISOString(),
+      proyecto:'RENOU',
+      alcance:{
+        tablas_incluidas:nombres,
+        buckets_storage_incluidos:buckets,
+        incluye_binarios_storage:true,
+        incluye_esquema_sql:false,
+        incluye_funciones_rpc:false,
+        incluye_politicas_rls:false,
+        incluye_usuarios_auth:false,
+        nota:'Respaldo de datos de tablas y objetos de Storage accesibles para la sesión administradora. No sustituye un backup nativo de PostgreSQL ni incluye usuarios Auth, esquema, funciones o políticas.'
+      },
+      conteos,
+      total_registros_principales:totalPrincipal,
+      total_registros_todas_las_tablas:totalTablas,
+      total_archivos_storage:Object.values(storage).reduce((n,a)=>n+a.length,0),
+      total_bytes_storage:bytesStorage,
+      tablas,
+      storage
+    };
+    estado('Preparando archivo y comprobando consistencia...');
+    for(const nombre of nombres){
+      if(!Array.isArray(backup.tablas[nombre]))throw new Error('Falta la tabla '+nombre+'. Se cancela para no generar un respaldo incompleto.');
+      const ids=backup.tablas[nombre].map(x=>x&&x.id).filter(x=>x!==undefined&&x!==null);
+      if(new Set(ids).size!==ids.length)throw new Error('Se detectaron IDs duplicados en '+nombre+'.');
+    }
+    const contenido=JSON.stringify(backup,null,2);
+    const blob=new Blob([contenido],{type:'application/json;charset=utf-8'});
+    const filename='renou-backup-integral-'+new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)+'.json';
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');
     a.href=url;a.download=filename;document.body.appendChild(a);a.click();document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url),1500);
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
     msg.style.color='#39FF14';
-    msg.textContent='Archivo generado: '+filename+'. Registros exportados: '+nombres.map(n=>n+': '+tablas[n].length).join(' · ')+'. Los binarios de Storage no están incluidos.';
-    try{await registrarLog('backup',null,'Formato '+formato.toUpperCase()+' — '+nombres.map(n=>n+':'+tablas[n].length).join(', '));}
+    msg.textContent='Respaldo generado: '+filename+' · '+totalTablas+' filas en 6 tablas · '+backup.total_archivos_storage+' archivos multimedia ('+(bytesStorage/1024/1024).toFixed(2)+' MB). Incluye los binarios de Storage.';
+    try{await registrarLog('backup',null,'V4 integral: '+totalTablas+' filas; '+backup.total_archivos_storage+' archivos Storage; '+bytesStorage+' bytes.');}
     catch(logError){console.warn('RENOU: backup descargado, pero no se pudo registrar la auditoría:',logError);msg.textContent+=' La descarga se completó, pero no se pudo registrar la acción en la bitácora.';}
-  }catch(e){msg.style.color='#FF4136';msg.textContent='Error al generar backup: '+(e.message||e);console.error('RENOU backup:',e);}
-  finally{backupEnCurso=false;}
+  }catch(e){
+    msg.style.color='#FF4136';msg.textContent='No se generó el backup: '+(e.message||e)+'. No se descargó un archivo parcial.';
+    console.error('RENOU backup integral:',e);
+  }finally{backupEnCurso=false;}
 }
 
 // VALIDACIÓN / VISTA PREVIA DE BACKUP — no escribe en Supabase.
@@ -3055,7 +3123,7 @@ async function inspeccionarBackup(){
   try{
     const info=await leerYValidarBackup(fileEl.files[0]);
     preview.style.color='#39FF14';
-    preview.textContent='Archivo válido ('+(info.esCompleto?'backup completo':'formato compatible')+'). '+info.total+' registros: '+info.disponibles.map(n=>n+' '+info.conteos[n]).join(' · ')+'. La validación no modificó la base de datos.';
+    preview.textContent='Archivo válido ('+(info.esCompleto?'backup de tablas principales':'formato compatible')+'). '+info.total+' registros: '+info.disponibles.map(n=>n+' '+info.conteos[n]).join(' · ')+'. La validación no modificó la base de datos.';
   }catch(e){preview.style.color='#FF4136';preview.textContent='No se puede validar el archivo: '+(e.message||e);}
 }
 
