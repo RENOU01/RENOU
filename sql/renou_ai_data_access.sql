@@ -7,9 +7,9 @@
 --   * p_user_id informado: exige que corresponda a un investigador activo;
 --     devuelve casos publicados y no publicados.
 --   * En ambos casos devuelve exclusivamente una lista fija de campos estructurados.
---   * Omite por ahora descripciones libres, texto adicional y enlaces multimedia:
---     pueden contener nombres, contactos o datos identificatorios. Se incorporarán
---     únicamente tras un proceso separado de revisión/anonimización.
+--   * Omite descripciones libres, dirección aproximada, detalles libres del sonido
+--     y archivos multimedia, que podrían identificar personas o domicilios.
+--   * Redondea coordenadas a dos decimales y limita la ubicación a ciudad/departamento.
 --   * La función solo puede ejecutarla service_role. La Edge Function deberá
 --     validar el JWT del usuario y decidir qué user_id enviar.
 --
@@ -71,20 +71,17 @@ begin
     'ubicacion_textual', a."C4p",
     'ubicacion_detalle', a."C4d",
     'ubicacion_ciudad', a."C4c",
-    'direccion', a."C4dir",
-    'latitud', a.lat,
-    'longitud', a.lon,
+    'latitud', round(a.lat, 2),
+    'longitud', round(a.lon, 2),
     'D1', a."D1",
     'D2', a."D2",
     'D3', a."D3",
     'D4', a."D4",
     'D5', a."D5",
-    'D5d', a."D5d",
     'E1', a."E1",
     'E2', a."E2",
     'E3', a."E3",
     'F1', a."F1",
-    'F2', a."F2",
     'F3', a."F3",
   ))
   from public.avistamientos a
