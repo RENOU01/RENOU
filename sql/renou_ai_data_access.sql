@@ -6,16 +6,16 @@
 --   * p_user_id NULL: solo devuelve casos publicados.
 --   * p_user_id informado: exige que corresponda a un investigador activo;
 --     devuelve casos publicados y no publicados.
---   * En ambos casos devuelve exclusivamente una lista fija de campos del caso.
+--   * En ambos casos devuelve exclusivamente una lista fija de campos estructurados.
+--   * Omite por ahora descripciones libres, texto adicional y enlaces multimedia:
+--     pueden contener nombres, contactos o datos identificatorios. Se incorporarán
+--     únicamente tras un proceso separado de revisión/anonimización.
 --   * La función solo puede ejecutarla service_role. La Edge Function deberá
 --     validar el JWT del usuario y decidir qué user_id enviar.
 --
 -- IMPORTANTE:
---   Descripciones y textos libres pueden contener datos personales escritos
---   accidentalmente. La Edge Function deberá filtrarlos antes de enviar a Gemini.
---   Los enlaces multimedia también deberán validarse y limitarse a archivos
---   públicos autorizados. No enviar a Gemini metadatos EXIF ni datos del bucket
---   que no sean necesarios.
+--   No se envían descripciones libres ni archivos multimedia en esta fase.
+--   No enviar a Gemini metadatos EXIF ni datos del bucket.
 
 begin;
 
@@ -62,7 +62,6 @@ begin
   select jsonb_strip_nulls(jsonb_build_object(
     'id', a.id,
     'tipo', a.tipo,
-    'estado', a.estado,
     'ce', a.ce,
     'ie', a.ie,
     'resultado', a.resultado,
@@ -87,10 +86,9 @@ begin
     'F1', a."F1",
     'F2', a."F2",
     'F3', a."F3",
-    'descripcion', a.descripcion,
-    'informacion_adicional', a.extra,
-    'imagenes_y_archivos', a.media_urls,
-    'video_publico', a.video_link
+    'cantidad_objetos', a."D3",
+    'descripcion', null,
+    'informacion_adicional', null
   ))
   from public.avistamientos a
   where (a.publicado is true or v_is_active_investigator is true)
