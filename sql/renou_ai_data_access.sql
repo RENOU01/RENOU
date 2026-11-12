@@ -86,9 +86,6 @@ begin
     'F1', a."F1",
     'F2', a."F2",
     'F3', a."F3",
-    'cantidad_objetos', a."D3",
-    'descripcion', null,
-    'informacion_adicional', null
   ))
   from public.avistamientos a
   where (a.publicado is true or v_is_active_investigator is true)
