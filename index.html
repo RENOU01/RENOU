@@ -1014,6 +1014,7 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
           <button class="btn-back" id="tab-agrup-btn" onclick="switchPanelTab('agrup')" style="display:none;border-color:rgba(57,255,20,.3);color:#39FF14">AGRUPACIONES</button>
           <button class="btn-back" id="tab-log-btn" onclick="switchPanelTab('log')" style="display:none;border-color:rgba(122,184,245,.4);color:#7AB8F5">ACTIVIDAD</button>
           <button class="btn-back" id="tab-backup-btn" onclick="switchPanelTab('backup')" style="border-color:rgba(255,200,50,.4);color:#FFC832">BACKUP</button>
+          <button class="btn-back" id="tab-ai-btn" onclick="switchPanelTab('ai')" style="display:none;border-color:rgba(57,255,20,.4);color:#39FF14">RENOU AI</button>
           <button class="btn-back" onclick="doLogout()" style="border-color:rgba(255,65,54,.4);color:#FF8478">CERRAR SESION</button>
         </div>
       </div>
@@ -1090,6 +1091,52 @@ button{cursor:pointer;font-family:'Inter',sans-serif}
           <p style="font-size:12px;color:#8BA3BC;margin-bottom:1rem">Elimina TODOS los casos permanentemente. Esta accion es irreversible. Asegurate de tener un backup antes de continuar.</p>
           <button class="act-btn act-delete" onclick="vaciarBaseDatos()" style="min-width:200px">&#9888; Vaciar todos los casos</button>
           <div id="vaciar-msg" style="font-size:12px;margin-top:.75rem;color:#8BA3BC"></div>
+        </div>
+      </div>
+
+      <!-- SUB-PESTAÑA: CONFIGURACIÓN RENOU AI (solo admin) -->
+      <div id="tab-ai" style="display:none">
+        <div class="panel-bar" style="margin-top:.5rem">
+          <span style="font-size:12px;color:#8BA3BC">Parámetros del asistente de inteligencia artificial</span>
+          <button class="filt" onclick="loadRenouAIConfig()">&#8635; Actualizar</button>
+        </div>
+        <div id="ai-config-status" role="status" aria-live="polite" style="font-size:12px;color:#8BA3BC;padding:10px 12px;background:#16314A;border:1px solid rgba(57,255,20,.15);border-radius:6px;margin-bottom:1rem">La configuración se carga desde Supabase.</div>
+        <div style="background:#16314A;border:1px solid rgba(57,255,20,.15);border-radius:8px;padding:1rem;margin-bottom:1rem">
+          <h3 style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1.5px;color:#39FF14;margin-bottom:1rem">1. DISPONIBILIDAD</h3>
+          <label style="display:flex;align-items:center;gap:10px;margin:0 0 14px;color:#E8F4FD;font-size:13px"><input type="checkbox" id="ai-enabled-public" style="accent-color:#39FF14;width:17px;height:17px"> Habilitar asistente para público general</label>
+          <label style="display:flex;align-items:center;gap:10px;margin:0;color:#E8F4FD;font-size:13px"><input type="checkbox" id="ai-enabled-research" style="accent-color:#39FF14;width:17px;height:17px"> Habilitar asistente para investigadores autenticados</label>
+          <p class="field-hint" style="margin-top:10px">Desactivar una modalidad impide nuevas consultas de ese perfil. No cambia los permisos de acceso a los expedientes.</p>
+        </div>
+        <div style="background:#16314A;border:1px solid rgba(57,255,20,.15);border-radius:8px;padding:1rem;margin-bottom:1rem">
+          <h3 style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1.5px;color:#39FF14;margin-bottom:1rem">2. PROVEEDOR Y MODELO</h3>
+          <div class="field-row">
+            <div class="field"><label>Proveedor</label><select id="ai-provider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option><option value="otro">Otro / pendiente</option></select></div>
+            <div class="field"><label>Modelo</label><input id="ai-model" type="text" maxlength="100" placeholder="Ej.: gemini-2.5-flash"></div>
+          </div>
+          <p class="field-hint">El nombre del proveedor/modelo es una referencia de configuración. La conexión efectiva se define en la función segura de Supabase.</p>
+        </div>
+        <div style="background:#16314A;border:1px solid rgba(57,255,20,.15);border-radius:8px;padding:1rem;margin-bottom:1rem">
+          <h3 style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1.5px;color:#39FF14;margin-bottom:1rem">3. LÍMITES DE USO</h3>
+          <div class="field-row">
+            <div class="field"><label>Consultas públicas por hora</label><input id="ai-public-limit" type="number" min="1" max="10000" step="1" value="20"></div>
+            <div class="field"><label>Consultas investigadores por hora</label><input id="ai-research-limit" type="number" min="1" max="10000" step="1" value="60"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>Máximo de tokens de respuesta</label><input id="ai-max-tokens" type="number" min="64" max="8192" step="1" value="1200"></div>
+            <div class="field"><label>Temperatura (0 a 1)</label><input id="ai-temperature" type="number" min="0" max="1" step="0.1" value="0.2"></div>
+          </div>
+        </div>
+        <div style="background:#16314A;border:1px solid rgba(57,255,20,.15);border-radius:8px;padding:1rem;margin-bottom:1rem">
+          <h3 style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1.5px;color:#39FF14;margin-bottom:1rem">4. INSTRUCCIONES DEL ASISTENTE</h3>
+          <div class="field"><label>Instrucciones generales</label><textarea id="ai-system-prompt" rows="8" maxlength="12000" placeholder="Definí el tono, metodología, criterios de evidencia y límites del asistente..."></textarea></div>
+          <p class="field-hint">La IA debe diferenciar hechos, testimonios e hipótesis; no inventar datos ni presentar una explicación especulativa como conclusión.</p>
+        </div>
+        <div style="background:rgba(255,200,50,.06);border:1px solid rgba(255,200,50,.25);border-radius:8px;padding:1rem;margin-bottom:1rem;font-size:12px;color:#D9C58A;line-height:1.6">
+          <b style="color:#FFC832">Seguridad:</b> no ingreses aquí claves API, contraseñas ni datos personales. Las credenciales del proveedor deben guardarse exclusivamente como secretos de Supabase Edge Functions. La configuración no concede por sí sola acceso a casos privados.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="act-btn act-save" id="ai-save-btn" onclick="saveRenouAIConfig()" style="max-width:240px">GUARDAR CONFIGURACIÓN</button>
+          <button class="act-btn act-publish" onclick="loadRenouAIConfig()" style="max-width:160px">DESCARTAR CAMBIOS</button>
         </div>
       </div>
 
@@ -2001,8 +2048,8 @@ function puedeGestiónar(){return panelIsAdmin;}
 
 function switchPanelTab(tab){
   if(tab==='backup'&&!panelIsAdmin){alert('Acceso restringido: el backup integral solo está disponible para cuentas con permiso de Administrador. Solicitá que se habilite es_admin en tu registro de investigadores.');return;}
-  if(['invest','agrup','log'].includes(tab)&&!panelIsAdmin){alert('Esta sección está disponible únicamente para administradores.');return;}
-  ['casos','invest','agrup','log','backup'].forEach(t=>{
+  if(['invest','agrup','log','ai','backup'].includes(tab)&&!panelIsAdmin){alert('Esta sección está disponible únicamente para administradores.');return;}
+  ['casos','invest','agrup','log','backup','ai'].forEach(t=>{
     const el=document.getElementById('tab-'+t);
     if(el)el.style.display=tab===t?'block':'none';
     const btn=document.getElementById('tab-'+t+'-btn');
@@ -2011,6 +2058,7 @@ function switchPanelTab(tab){
   if(tab==='invest')loadInvestigadores();
   if(tab==='agrup')loadAgrupacionesPanel();
   if(tab==='log')loadLog();
+  if(tab==='ai')loadRenouAIConfig();
 }
 
 async function doLogin(){
@@ -2061,6 +2109,7 @@ function onLoginSuccess(){
           document.getElementById('tab-agrup-btn').style.display='inline-block';
           document.getElementById('tab-log-btn').style.display='inline-block';
           document.getElementById('tab-backup-btn').style.display='inline-block';
+          document.getElementById('tab-ai-btn').style.display='inline-block';
         }
       } else {
         document.getElementById('panel-email').textContent=panelSession.user.email;
@@ -2669,6 +2718,76 @@ async function loadLog(){
     }).join('');
   }catch(e){
     tbody.innerHTML='<tr><td colspan="5" style="color:#FF4136">Error: '+esc(e.message)+'</td></tr>';
+  }
+}
+
+// ============================================================
+// CONFIGURACIÓN RENOU AI — solo administradores
+// Requiere las RPC protegidas renou_ai_config_get y
+// renou_ai_config_save en Supabase. No almacena claves API.
+// ============================================================
+function setRenouAIStatus(message,isError=false){
+  const el=document.getElementById('ai-config-status');
+  if(!el)return;
+  el.textContent=message;
+  el.style.color=isError?'#FF8478':'#8BA3BC';
+  el.style.borderColor=isError?'rgba(255,65,54,.4)':'rgba(57,255,20,.15)';
+}
+function validateRenouAIConfig(){
+  const publicLimit=Number(document.getElementById('ai-public-limit').value);
+  const researchLimit=Number(document.getElementById('ai-research-limit').value);
+  const maxTokens=Number(document.getElementById('ai-max-tokens').value);
+  const temperature=Number(document.getElementById('ai-temperature').value);
+  const model=document.getElementById('ai-model').value.trim();
+  if(!Number.isInteger(publicLimit)||publicLimit<1||publicLimit>10000)throw new Error('El límite público debe ser un entero entre 1 y 10000.');
+  if(!Number.isInteger(researchLimit)||researchLimit<1||researchLimit>10000)throw new Error('El límite de investigadores debe ser un entero entre 1 y 10000.');
+  if(!Number.isInteger(maxTokens)||maxTokens<64||maxTokens>8192)throw new Error('Los tokens máximos deben estar entre 64 y 8192.');
+  if(!Number.isFinite(temperature)||temperature<0||temperature>1)throw new Error('La temperatura debe estar entre 0 y 1.');
+  if(model.length>100)throw new Error('El nombre del modelo es demasiado largo.');
+  return {enabled_public:document.getElementById('ai-enabled-public').checked,
+    enabled_research:document.getElementById('ai-enabled-research').checked,
+    provider:document.getElementById('ai-provider').value,model,
+    public_requests_per_hour:publicLimit,research_requests_per_hour:researchLimit,
+    max_output_tokens:maxTokens,temperature,
+    system_prompt:document.getElementById('ai-system-prompt').value};
+}
+async function loadRenouAIConfig(){
+  if(!panelIsAdmin||!panelSession){setRenouAIStatus('Acceso restringido: inicia sesión como administrador.',true);return;}
+  if(!sb){setRenouAIStatus('No hay conexión con Supabase.',true);return;}
+  setRenouAIStatus('Consultando configuración segura...');
+  try{
+    const{data,error}=await sb.rpc('renou_ai_config_get');
+    if(error)throw error;
+    const c=data?.config||data||{};
+    document.getElementById('ai-enabled-public').checked=!!c.enabled_public;
+    document.getElementById('ai-enabled-research').checked=!!c.enabled_research;
+    document.getElementById('ai-provider').value=c.provider||'gemini';
+    document.getElementById('ai-model').value=c.model||'gemini-2.5-flash';
+    document.getElementById('ai-public-limit').value=c.public_requests_per_hour??20;
+    document.getElementById('ai-research-limit').value=c.research_requests_per_hour??60;
+    document.getElementById('ai-max-tokens').value=c.max_output_tokens??1200;
+    document.getElementById('ai-temperature').value=c.temperature??0.2;
+    document.getElementById('ai-system-prompt').value=c.system_prompt||'Eres el asistente de RENOU. Trabaja con rigor, distingue datos verificados, testimonios e hipótesis, cita los identificadores de los casos consultados y declara cuando la información sea insuficiente. No inventes datos, no diagnostiques causas sin evidencia y no presentes especulaciones como hechos.';
+    setRenouAIStatus('Configuración cargada desde Supabase.');
+  }catch(e){
+    setRenouAIStatus('No se pudo cargar la configuración. Es posible que aún falte crear la función segura renou_ai_config_get en Supabase. Detalle: '+(e.message||'error desconocido'),true);
+  }
+}
+async function saveRenouAIConfig(){
+  if(!panelIsAdmin||!panelSession){setRenouAIStatus('Acceso restringido: solo administradores.',true);return;}
+  const btn=document.getElementById('ai-save-btn');
+  try{
+    const config=validateRenouAIConfig();
+    if(!confirm('¿Guardar estos parámetros de RENOU AI en Supabase?'))return;
+    btn.disabled=true;btn.textContent='GUARDANDO...';
+    const{error}=await sb.rpc('renou_ai_config_save',{p_config:config});
+    if(error)throw error;
+    setRenouAIStatus('Configuración guardada correctamente en Supabase.');
+    toast('Configuración RENOU AI guardada.');
+  }catch(e){
+    setRenouAIStatus('No se pudo guardar. Verifica que exista la RPC protegida renou_ai_config_save y que tu cuenta tenga permisos de administrador. Detalle: '+(e.message||'error desconocido'),true);
+  }finally{
+    btn.disabled=false;btn.textContent='GUARDAR CONFIGURACIÓN';
   }
 }
 
