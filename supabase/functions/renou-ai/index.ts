@@ -74,7 +74,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const rawBody = await req.text();
-    if (rawBody.length > 8192) {
+    if (encoder.encode(rawBody).byteLength > 8192) {
       return json(413, { error: "La solicitud supera el tamaño permitido." }, origin);
     }
     let body: Record<string, unknown>;
@@ -254,21 +254,35 @@ Deno.serve(async (req: Request) => {
       "No solicites ni intentes inferir identidades personales.",
     ].join("\n");
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ role: "user", parts: [{ text: `Consulta: ${question}\n\nContexto autorizado RENOU:\n${JSON.stringify(context)}` }] }],
-          generationConfig: {
-            temperature: Number(config.temperature),
-            maxOutputTokens: Number(config.max_output_tokens),
-          },
-        }),
-      },
-    );
+    // Evita que una espera indefinida del proveedor agote el tiempo de la Edge Function.
+    const geminiController = new AbortController();
+    const geminiTimeout = setTimeout(() => geminiController.abort(), 20_000);
+    let geminiResponse: Response;
+    try {
+      geminiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
+          signal: geminiController.signal,
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemInstruction }] },
+            contents: [{ role: "user", parts: [{ text: `Consulta: ${question}\\n\\nContexto autorizado RENOU:\\n${JSON.stringify(context)}` }] }],
+            generationConfig: {
+              temperature: Number(config.temperature),
+              maxOutputTokens: Number(config.max_output_tokens),
+            },
+          }),
+        },
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        return json(504, { error: "El proveedor de IA superó el tiempo máximo de respuesta." }, origin);
+      }
+      throw error;
+    } finally {
+      clearTimeout(geminiTimeout);
+    }
 
     const geminiData = await geminiResponse.json();
     if (!geminiResponse.ok) {
