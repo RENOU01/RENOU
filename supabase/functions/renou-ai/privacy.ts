@@ -33,3 +33,8 @@ export function containsLikelyPersonalData(value: string): boolean {
 export function resolveAccessScope(isActiveInvestigator: boolean): "public" | "research" {
   return isActiveInvestigator ? "research" : "public";
 }
+
+// La RPC SQL solo debe recibir p_user_id cuando se otorgó alcance investigador.
+export function resolveCasesUserId(scope: "public" | "research", userId: string | null): string | null {
+  return scope === "research" ? userId : null;
+}
