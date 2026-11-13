@@ -82,7 +82,7 @@ begin
     'E2', a."E2",
     'E3', a."E3",
     'F1', a."F1",
-    'F3', a."F3",
+    'F3', a."F3"
   ))
   from public.avistamientos a
   where (a.publicado is true or v_is_active_investigator is true)
