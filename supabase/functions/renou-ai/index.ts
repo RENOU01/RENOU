@@ -1,5 +1,5 @@
 // RENOU AI — Edge Function (fase inicial)
-// Lee exclusivamente el conjunto de campos de public.renou_ai_get_cases.
+// Lee exclusivamente los campos permitidos por public.renou_ai_get_cases_page.
 // No devuelve expedientes al navegador: solo devuelve la respuesta del modelo.
 // La función no se activa mientras enabled_public / enabled_research estén en false.
 
@@ -56,7 +56,7 @@ function scoreCase(row: Record<string, unknown>, terms: string[]): number {
     "ubicacion_ciudad", "D1", "D2", "D3", "D4", "D5",
     "E1", "E2", "E3", "F1", "F3",
   ];
-  const haystack = fields.map((key) => normalize(row[key])).join(" ").toLocaleLowerCase("es");
+  const haystack = fields.map((key) => normalize(row[key])).join(" ").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("es");
   return terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
 }
 
@@ -164,13 +164,20 @@ Deno.serve(async (req: Request) => {
       return json(503, { error: "El modelo configurado no es válido." }, origin);
     }
 
-    // Recorre el historial autorizado completo por páginas. La RPC solo devuelve
-    // campos permitidos y omite datos personales, direcciones precisas y metadatos.
-    const allCases: Record<string, unknown>[] = [];
+    // Recorre el historial autorizado por cursor. Procesa cada página en memoria
+    // y conserva solo agregaciones y los 35 casos con mayor coincidencia.
+    // Así se revisa todo el historial sin cargar todos los expedientes en RAM.
     const scanStartedAt = Date.now();
     let afterId: string | null = null;
     let hasMore = true;
     let pagesRead = 0;
+    let totalCases = 0;
+    const byYear: Record<string, number> = {};
+    const byType: Record<string, number> = {};
+    const terms = question.toLocaleLowerCase("es")
+      .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+      .split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3);
+    const selected: { row: Record<string, unknown>; score: number }[] = [];
 
     while (hasMore) {
       if (Date.now() - scanStartedAt > MAX_HISTORY_SCAN_MS) {
@@ -192,7 +199,23 @@ Deno.serve(async (req: Request) => {
         next_id?: string | null;
       } | null;
       const batch = Array.isArray(page?.cases) ? page.cases : [];
-      allCases.push(...batch);
+      totalCases += batch.length;
+
+      for (const row of batch) {
+        const date = normalize(row.fecha);
+        const year = /^\\d{4}/.test(date) ? date.slice(0, 4) : "Sin fecha";
+        byYear[year] = (byYear[year] || 0) + 1;
+        const type = normalize(row.tipo) || "Sin tipo";
+        byType[type] = (byType[type] || 0) + 1;
+
+        const score = scoreCase(row, terms);
+        if (score > 0) {
+          selected.push({ row, score });
+          selected.sort((a, b) => b.score - a.score);
+          if (selected.length > MAX_CASES_IN_CONTEXT) selected.pop();
+        }
+      }
+
       hasMore = page?.has_more === true;
       afterId = typeof page?.next_id === "string" ? page.next_id : null;
       pagesRead++;
@@ -207,21 +230,11 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const terms = question.toLocaleLowerCase("es")
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3);
-    const ranked = allCases.map((row) => {
-      const searchable = Object.fromEntries(Object.entries(row).map(([k, v]) => [
-        k,
-        typeof v === "string"
-          ? v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es")
-          : v,
-      ]));
-      return { row, score: scoreCase(searchable, terms) };
-    }).sort((a, b) => b.score - a.score);
-
-    const selected = ranked.filter((item) => item.score > 0).slice(0, MAX_CASES_IN_CONTEXT);
-    const historySummary = summarize(allCases);
+    const historySummary = {
+      total_casos_consultados: totalCases,
+      casos_por_anio: byYear,
+      casos_por_tipo: byType,
+    };
     const context = {
       alcance: scope === "public" ? "Solo casos publicados" : "Casos publicados y no publicados",
       resumen_del_historial: historySummary,
@@ -267,7 +280,7 @@ Deno.serve(async (req: Request) => {
 
     return json(200, {
       answer,
-      cases_considered: allCases.length,
+      cases_considered: totalCases,
       cases_relevant: selected.length,
       scope,
     }, origin);
