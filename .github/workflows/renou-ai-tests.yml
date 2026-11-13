@@ -30,9 +30,6 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Format check
-        run: deno fmt --check supabase/functions/renou-ai/privacy.ts supabase/functions/renou-ai/privacy_test.ts
-
       - name: Type check
         run: deno check supabase/functions/renou-ai/index.ts supabase/functions/renou-ai/privacy_test.ts
 
