@@ -4,7 +4,7 @@
 // La función no se activa mientras enabled_public / enabled_research estén en false.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { containsLikelyPersonalData, sanitizeGeographicText } from "./privacy.ts";
+import { containsLikelyPersonalData, resolveAccessScope, sanitizeGeographicText } from "./privacy.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -131,7 +131,7 @@ Deno.serve(async (req: Request) => {
       if (investigatorError) {
         return json(503, { error: "No se pudo verificar el estado de la cuenta investigadora." }, origin);
       }
-      if (investigator) scope = "research";
+      scope = resolveAccessScope(!!investigator);
     }
 
     const { data: config, error: configError } = await admin
