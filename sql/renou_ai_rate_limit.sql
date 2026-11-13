@@ -1,5 +1,7 @@
--- RENOU AI: límite horario persistente para Edge Function
+-- RENOU AI: límite horario persistente para Edge Function.
 -- Solo guarda un hash SHA-256; no guarda IP ni pregunta.
+-- Los registros inactivos durante más de dos horas se depuran al consumir el límite.
+
 begin;
 
 create table if not exists public.renou_ai_rate_limits (
@@ -8,6 +10,9 @@ create table if not exists public.renou_ai_rate_limits (
   request_count integer not null default 0 check (request_count >= 0),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists renou_ai_rate_limits_updated_at_idx
+  on public.renou_ai_rate_limits (updated_at);
 
 alter table public.renou_ai_rate_limits enable row level security;
 revoke all on table public.renou_ai_rate_limits from public, anon, authenticated;
@@ -49,6 +54,11 @@ begin
         updated_at = now()
   returning request_count, window_started_at
   into v_count, v_window;
+
+  -- Depuración oportunista: conserva margen suficiente para la ventana horaria.
+  -- El índice evita recorrer toda la tabla cuando existan muchos registros.
+  delete from public.renou_ai_rate_limits
+  where updated_at < now() - interval '2 hours';
 
   return jsonb_build_object(
     'allowed', v_count <= p_limit,
