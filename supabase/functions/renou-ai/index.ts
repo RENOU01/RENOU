@@ -55,6 +55,7 @@ function sanitizeGeographicText(value: unknown, maxLength = 100): string {
     .replace(/[\r\n\t]+/g, " ")
     .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[dato omitido]")
     .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, "[dato omitido]")
+    .replace(/\b\d{1,2}\.?\d{3}\.?\d{3}-?\d\b/g, "[dato omitido]")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
@@ -64,7 +65,8 @@ function containsLikelyPersonalData(value: string): boolean {
   const email = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
   const phone = /(?:\+?\d[\d\s().-]{7,}\d)/;
   const uruguayId = /\b\d{1,2}\.?\d{3}\.?\d{3}-?\d\b/;
-  const identifiedPerson = /\b(?:testigo|denunciante|reportante|investigador(?:a)?|persona|señor|señora|sr\.?|sra\.?)\s+(?:llamado\s+|de nombre\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}\b/i;
+  // Heurística contextual: evita confundir "testigo de luz" o "persona observó" con nombres. No detecta todos los nombres propios.
+  const identifiedPerson = /\b(?:testigo|denunciante|reportante|investigador(?:a)?|señor|señora|sr\.?|sra\.?)(?:\s*[:：]\s*|\s+)(?:(?:llamado|de nombre|identificado como)\s+)?(?!de(?=\s|$)|del(?=\s|$)|la(?=\s|$)|el(?=\s|$)|los(?=\s|$)|las(?=\s|$)|que(?=\s|$)|en(?=\s|$)|con(?=\s|$)|sin(?=\s|$)|vio(?=\s|$)|observó(?=\s|$)|observo(?=\s|$)|afirma(?=\s|$)|declara(?=\s|$)|relata(?=\s|$)|dijo(?=\s|$)|estaba(?=\s|$)|presenció(?=\s|$)|presencio(?=\s|$)|tomó(?=\s|$)|tomo(?=\s|$)|fotografió(?=\s|$)|fotografio(?=\s|$)|registró(?=\s|$)|registro(?=\s|$)|reportó(?=\s|$)|reporto(?=\s|$)|indicó(?=\s|$)|indico(?=\s|$))[\p{L}]+(?:\s+[\p{L}]+){0,2}(?=\s|$)/iu;
   return email.test(value) || phone.test(value) || uruguayId.test(value) || identifiedPerson.test(value);
 }
 
