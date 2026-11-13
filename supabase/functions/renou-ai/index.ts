@@ -66,7 +66,7 @@ function containsLikelyPersonalData(value: string): boolean {
   const phone = /(?:\+?\d[\d\s().-]{7,}\d)/;
   const uruguayId = /\b\d{1,2}\.?\d{3}\.?\d{3}-?\d\b/;
   // Heurística contextual: evita confundir "testigo de luz" o "persona observó" con nombres. No detecta todos los nombres propios.
-  const identifiedPerson = /\b(?:testigo|denunciante|reportante|investigador(?:a)?|señor|señora|sr\.?|sra\.?)(?:\s*[:：]\s*|\s+)(?:(?:llamado|de nombre|identificado como)\s+)?(?!de(?=\s|$)|del(?=\s|$)|la(?=\s|$)|el(?=\s|$)|los(?=\s|$)|las(?=\s|$)|que(?=\s|$)|en(?=\s|$)|con(?=\s|$)|sin(?=\s|$)|vio(?=\s|$)|observó(?=\s|$)|observo(?=\s|$)|afirma(?=\s|$)|declara(?=\s|$)|relata(?=\s|$)|dijo(?=\s|$)|estaba(?=\s|$)|presenció(?=\s|$)|presencio(?=\s|$)|tomó(?=\s|$)|tomo(?=\s|$)|fotografió(?=\s|$)|fotografio(?=\s|$)|registró(?=\s|$)|registro(?=\s|$)|reportó(?=\s|$)|reporto(?=\s|$)|indicó(?=\s|$)|indico(?=\s|$))[\p{L}]+(?:\s+[\p{L}]+){0,2}(?=\s|$)/iu;
+  const identifiedPerson = /\b(?:[Tt]estigo|[Dd]enunciante|[Rr]eportante|[Ii]nvestigador(?:a)?|[Ss]eñor|[Ss]eñora|[Ss]r\.?|[Ss]ra\.?)(?:\s*[:：]\s*(?:(?:llamado|de nombre|identificado como)\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}|\s+(?:(?:llamado|de nombre|identificado como)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?))\b/u;
   return email.test(value) || phone.test(value) || uruguayId.test(value) || identifiedPerson.test(value);
 }
 
