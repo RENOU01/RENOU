@@ -1,6 +1,5 @@
 -- RENOU AI: límite horario persistente para Edge Function
--- Ejecutar en Supabase SQL Editor antes de desplegar la función.
--- Solo guarda un hash de la clave de limitación; nunca guarda IP ni pregunta.
+-- Solo guarda un hash SHA-256; no guarda IP ni pregunta.
 begin;
 
 create table if not exists public.renou_ai_rate_limits (
