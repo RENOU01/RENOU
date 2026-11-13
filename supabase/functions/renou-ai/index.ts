@@ -17,7 +17,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const MAX_QUESTION_CHARS = 2000;
 const PAGE_SIZE = 50;
-const MAX_PAGES = 2001; // Permite comprobar si existe un registro posterior a los primeros 100.000.
+const MAX_HISTORY_SCAN_MS = 55_000; // Si no termina, falla sin devolver análisis parcial.
 const MAX_CASES_IN_CONTEXT = 35;
 const encoder = new TextEncoder();
 
@@ -141,8 +141,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // El límite se aplica con una ventana persistente en PostgreSQL.
-    const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    const rateIdentity = scope === "research" ? `research:${userId}` : `public:${forwarded}`;
+    const trustedEdgeIp = req.headers.get("cf-connecting-ip") || req.headers.get("x-real-ip") || "shared-public-bucket";
+    const rateIdentity = scope === "research" ? `research:${userId}` : `public:${trustedEdgeIp}`;
     const rateHash = await sha256(rateIdentity);
     const rateLimit = scope === "research"
       ? config.research_requests_per_hour
@@ -167,18 +167,43 @@ Deno.serve(async (req: Request) => {
     // Recorre el historial autorizado completo por páginas. La RPC solo devuelve
     // campos permitidos y omite datos personales, direcciones precisas y metadatos.
     const allCases: Record<string, unknown>[] = [];
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const { data, error } = await admin.rpc("renou_ai_get_cases", {
+    const scanStartedAt = Date.now();
+    let afterId: string | null = null;
+    let hasMore = true;
+    let pagesRead = 0;
+
+    while (hasMore) {
+      if (Date.now() - scanStartedAt > MAX_HISTORY_SCAN_MS) {
+        return json(503, {
+          error: "El historial autorizado no pudo recorrerse por completo dentro del tiempo disponible. No se generó una respuesta parcial.",
+        }, origin);
+      }
+
+      const { data, error } = await admin.rpc("renou_ai_get_cases_page", {
         p_user_id: userId,
         p_limit: PAGE_SIZE,
-        p_offset: page * PAGE_SIZE,
+        p_after_id: afterId,
       });
       if (error) throw new Error("Error consultando el historial autorizado: " + error.message);
-      const batch = Array.isArray(data) ? data as Record<string, unknown>[] : [];
+
+      const page = data as {
+        cases?: Record<string, unknown>[];
+        has_more?: boolean;
+        next_id?: string | null;
+      } | null;
+      const batch = Array.isArray(page?.cases) ? page.cases : [];
       allCases.push(...batch);
-      if (batch.length < PAGE_SIZE) break;
-      if (page === MAX_PAGES - 1) {
-        return json(413, { error: "El historial supera el máximo de lectura segura de esta versión. Se requiere ampliar el mecanismo de búsqueda antes de responder." }, origin);
+      hasMore = page?.has_more === true;
+      afterId = typeof page?.next_id === "string" ? page.next_id : null;
+      pagesRead++;
+
+      if (hasMore && (!afterId || batch.length === 0)) {
+        throw new Error("La paginación devolvió un cursor incompleto.");
+      }
+      if (pagesRead > 100000) {
+        return json(503, {
+          error: "El historial excede el límite preventivo de páginas de esta versión. No se generó una respuesta parcial.",
+        }, origin);
       }
     }
 
