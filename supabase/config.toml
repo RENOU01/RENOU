@@ -1,0 +1,4 @@
+[functions.renou-ai]
+# La función valida opcionalmente el JWT internamente:
+# permite visitantes públicos sin sesión y verifica los tokens de investigadores.
+verify_jwt = false
