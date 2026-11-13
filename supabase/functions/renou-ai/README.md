@@ -8,7 +8,7 @@
 - Investigador: publicados y no publicados, tras validar JWT y cuenta activa.
 - Nunca acepta `user_id`, rol, alcance ni permisos desde el cuerpo de la petición.
 - No devuelve expedientes al navegador; devuelve únicamente respuesta y contadores.
-- Omite nombres, correos, teléfonos, identidad de personas, dirección aproximada, texto libre y metadatos administrativos.
+- La RPC no selecciona nombres, correos, teléfonos, identidad de personas, dirección aproximada (`C4dir`), detalle libre del sonido (`D5d`) ni metadatos administrativos. Los campos de ubicación incluidos (`C4p`, `C4d`, `C4c`) describen país, departamento y ciudad del caso; son texto aportado en el formulario y deben seguir considerándose datos no confiables, no identidad verificada.
 - La clave Gemini se obtiene de `GEMINI_API_KEY`, como secreto de Supabase.
 
 ## Requisitos previos
@@ -34,6 +34,10 @@ supabase functions deploy renou-ai
 La RPC usa paginación por cursor sobre el identificador único del caso, sin OFFSET ni techo fijo de 100.000 filas. La Edge Function recorre todas las páginas y calcula agregaciones por año y tipo; conserva en memoria únicamente los 35 casos con mayor coincidencia, no el historial entero.
 
 Si no puede completar el recorrido dentro del tiempo máximo preventivo, devuelve un error y no genera una respuesta parcial. Aunque la paginación no tiene techo por cantidad de filas, el tiempo de ejecución de Edge Functions sí impone un límite práctico. Antes de habilitarla con un historial grande, se debe medir la duración real y, si es necesario, trasladar búsqueda y agregaciones a PostgreSQL para evitar descargar todos los registros en cada consulta.
+
+La llamada al proveedor Gemini tiene un tiempo máximo de 20 segundos, incluida la lectura de su respuesta. El cuerpo de la solicitud entrante se limita a 8 KiB medidos en bytes.
+
+El límite público usa `cf-connecting-ip` o `x-real-ip` si están presentes; si no, utiliza un único grupo compartido. Antes de producción debe verificarse que esos encabezados sean establecidos y sobrescritos por la infraestructura de Supabase y no aceptados directamente del cliente. CORS no evita llamadas desde clientes no navegador y no es una defensa contra abuso.
 
 La coincidencia de casos es léxica inicial, no búsqueda semántica.
 
