@@ -17,11 +17,11 @@
 2. Ejecutar `sql/renou_ai_rate_limit.sql`.
 3. Confirmar que las funciones nuevas solo tienen EXECUTE para `service_role`.
 4. Mantener `enabled_public=false` y `enabled_research=false`.
-5. Configurar los secretos en Supabase. Las variables `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` son las variables estándar del entorno; añadir `GEMINI_API_KEY` como secreto.
+5. Configurar `GEMINI_API_KEY` como secreto de Edge Function. Las variables Supabase estándar deben estar disponibles en el entorno.
 
 ## Despliegue futuro
 
-El archivo `supabase/config.toml` establece `verify_jwt=false` para que visitantes públicos puedan invocar la función sin sesión. Esto no significa que se confíe en el cliente: la función valida cualquier Bearer token recibido y determina el alcance en el servidor. No se debe eliminar esa validación interna.
+`supabase/config.toml` establece `verify_jwt=false` para permitir visitantes públicos sin sesión. La Edge Function valida internamente cualquier Bearer token y determina el alcance en el servidor. CORS no sustituye autenticación ni control de acceso.
 
 Cuando se autorice el despliegue, desde la raíz del repositorio y con Supabase CLI vinculado al proyecto correcto:
 
@@ -29,11 +29,13 @@ Cuando se autorice el despliegue, desde la raíz del repositorio y con Supabase 
 supabase functions deploy renou-ai
 ```
 
-## Historial completo
+## Historial completo y límites de esta fase
 
-La nueva RPC usa paginación por cursor sobre el identificador único del caso, sin OFFSET ni techo de 100.000 filas. La Edge Function sigue leyendo páginas hasta terminar el historial autorizado. Tiene un límite preventivo de tiempo: si no logra recorrerlo completo, responde con error y no genera un análisis parcial.
+La RPC usa paginación por cursor sobre el identificador único del caso, sin OFFSET ni techo fijo de 100.000 filas. La Edge Function recorre todas las páginas y calcula agregaciones por año y tipo; conserva en memoria únicamente los 35 casos con mayor coincidencia, no el historial entero.
 
-La versión actual todavía carga el historial autorizado en memoria y realiza coincidencia léxica en la Edge Function. Para bases muy grandes, el siguiente paso será mover búsqueda y agregaciones a PostgreSQL para evitar recorrer y cargar todos los expedientes en cada consulta.
+Si no puede completar el recorrido dentro del tiempo máximo preventivo, devuelve un error y no genera una respuesta parcial. Aunque la paginación no tiene techo por cantidad de filas, el tiempo de ejecución de Edge Functions sí impone un límite práctico. Antes de habilitarla con un historial grande, se debe medir la duración real y, si es necesario, trasladar búsqueda y agregaciones a PostgreSQL para evitar descargar todos los registros en cada consulta.
+
+La coincidencia de casos es léxica inicial, no búsqueda semántica.
 
 ## Estado
 
