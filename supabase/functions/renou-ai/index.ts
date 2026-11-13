@@ -17,7 +17,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 const MAX_QUESTION_CHARS = 2000;
 const PAGE_SIZE = 50;
-const MAX_PAGES = 2000; // Hasta 100.000 registros; la función SQL también limita OFFSET a 100.000.
+const MAX_PAGES = 2001; // Permite comprobar si existe un registro posterior a los primeros 100.000.
 const MAX_CASES_IN_CONTEXT = 35;
 const encoder = new TextEncoder();
 
