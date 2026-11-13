@@ -57,8 +57,17 @@ begin
 
   -- Depuración oportunista: conserva margen suficiente para la ventana horaria.
   -- El índice evita recorrer toda la tabla cuando existan muchos registros.
-  delete from public.renou_ai_rate_limits
-  where updated_at < now() - interval '2 hours';
+  with stale_keys as (
+    select key_hash
+    from public.renou_ai_rate_limits
+    where updated_at < now() - interval '2 hours'
+    order by updated_at
+    limit 500
+    for update skip locked
+  )
+  delete from public.renou_ai_rate_limits r
+  using stale_keys s
+  where r.key_hash = s.key_hash;
 
   return jsonb_build_object(
     'allowed', v_count <= p_limit,
