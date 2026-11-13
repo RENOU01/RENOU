@@ -276,7 +276,7 @@ Deno.serve(async (req: Request) => {
           signal: geminiController.signal,
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemInstruction }] },
-            contents: [{ role: "user", parts: [{ text: `Consulta: ${question}\\n\\nContexto autorizado RENOU:\\n${JSON.stringify(context)}` }] }],
+            contents: [{ role: "user", parts: [{ text: `Consulta: ${question}\n\nContexto autorizado RENOU:\n${JSON.stringify(context)}` }] }],
             generationConfig: {
               temperature: Number(config.temperature),
               maxOutputTokens: Number(config.max_output_tokens),
