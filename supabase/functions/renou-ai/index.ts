@@ -73,8 +73,21 @@ Deno.serve(async (req: Request) => {
       return json(503, { error: "La función no está configurada." }, origin);
     }
 
-    const body = await req.json();
-    const question = typeof body?.question === "string" ? body.question.trim() : "";
+    const rawBody = await req.text();
+    if (rawBody.length > 8192) {
+      return json(413, { error: "La solicitud supera el tamaño permitido." }, origin);
+    }
+    let body: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(rawBody);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return json(400, { error: "Formato de solicitud inválido." }, origin);
+      }
+      body = parsed as Record<string, unknown>;
+    } catch {
+      return json(400, { error: "El cuerpo de la solicitud no contiene JSON válido." }, origin);
+    }
+    const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question || question.length > MAX_QUESTION_CHARS) {
       return json(400, { error: "La consulta debe tener entre 1 y 2000 caracteres." }, origin);
     }
@@ -242,10 +255,10 @@ Deno.serve(async (req: Request) => {
     ].join("\n");
 
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: "user", parts: [{ text: `Consulta: ${question}\n\nContexto autorizado RENOU:\n${JSON.stringify(context)}` }] }],
