@@ -1,45 +1,40 @@
-# RENOU AI — despliegue de Edge Function (fase inicial)
-
-Esta carpeta contiene la función intermediaria entre el sitio RENOU, Supabase y Gemini.
+# RENOU AI — Edge Function (fase de pruebas)
 
 ## Protección de datos
 
-- La función no consulta `avistamientos_audip`.
-- Lee los casos únicamente mediante `public.renou_ai_get_cases`, que devuelve una lista fija de campos.
-- Público: casos publicados. Investigador autenticado y activo: casos publicados y no publicados.
+- No consulta `avistamientos_audip`.
+- Lee casos exclusivamente mediante `renou_ai_get_cases_page`, con una lista fija de campos.
+- Público: casos publicados.
+- Investigador: publicados y no publicados, tras validar JWT y cuenta activa.
 - Nunca acepta `user_id`, rol, alcance ni permisos desde el cuerpo de la petición.
-- No devuelve los registros al navegador; solo devuelve la respuesta generada y contadores.
-- No envía nombres, correos, teléfonos, identidades, campos administrativos, direcciones aproximadas ni metadatos al proveedor.
-- El límite horario usa un hash SHA-256 de la identidad de limitación. No persiste la IP ni la pregunta.
-- La función recorre el historial autorizado por páginas y prepara estadísticas globales más una selección de casos coincidentes.
+- No devuelve expedientes al navegador; devuelve únicamente respuesta y contadores.
+- Omite nombres, correos, teléfonos, identidad de personas, dirección aproximada, texto libre y metadatos administrativos.
+- La clave Gemini se obtiene de `GEMINI_API_KEY`, como secreto de Supabase.
 
-## Requisitos previos en Supabase
+## Requisitos previos
 
-1. Ejecutar `sql/renou_ai_rate_limit.sql` en SQL Editor.
-2. Confirmar que la función `renou_ai_get_cases(uuid,integer,integer)` existe y solo tiene EXECUTE para `service_role`.
-3. Mantener `enabled_public=false` y `enabled_research=false` en `renou_ai_config`.
-4. Configurar los secretos de la Edge Function:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `SUPABASE_ANON_KEY`
-   - `GEMINI_API_KEY`
+1. Ejecutar `sql/renou_ai_keyset_pagination.sql`.
+2. Ejecutar `sql/renou_ai_rate_limit.sql`.
+3. Confirmar que las funciones nuevas solo tienen EXECUTE para `service_role`.
+4. Mantener `enabled_public=false` y `enabled_research=false`.
+5. Configurar los secretos en Supabase. Las variables `SUPABASE_URL`, `SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY` son las variables estándar del entorno; añadir `GEMINI_API_KEY` como secreto.
 
-Supabase normalmente provee las tres primeras variables de entorno. La clave Gemini debe añadirse como secreto y nunca guardarse en GitHub ni en `index.html`.
+## Despliegue futuro
 
-## Despliegue
+El archivo `supabase/config.toml` establece `verify_jwt=false` para que visitantes públicos puedan invocar la función sin sesión. Esto no significa que se confíe en el cliente: la función valida cualquier Bearer token recibido y determina el alcance en el servidor. No se debe eliminar esa validación interna.
 
-Desde la raíz del proyecto, con Supabase CLI vinculado al proyecto correcto:
+Cuando se autorice el despliegue, desde la raíz del repositorio y con Supabase CLI vinculado al proyecto correcto:
 
 ```bash
 supabase functions deploy renou-ai
 ```
 
-La función valida la sesión de Supabase cuando recibe un Bearer token. Sin token, trata la consulta como pública y aplica únicamente el alcance publicado.
+## Historial completo
 
-## Estado y limitaciones de esta fase
+La nueva RPC usa paginación por cursor sobre el identificador único del caso, sin OFFSET ni techo de 100.000 filas. La Edge Function sigue leyendo páginas hasta terminar el historial autorizado. Tiene un límite preventivo de tiempo: si no logra recorrerlo completo, responde con error y no genera un análisis parcial.
 
-- Este commit agrega código fuente y SQL; no despliega nada en Supabase.
-- Gemini no será llamado mientras los dos interruptores permanezcan apagados.
-- La selección de casos relevantes es una búsqueda léxica inicial sobre campos estructurados; no es todavía una búsqueda semántica ni una indexación vectorial.
-- La función recorre hasta 100.000 casos. Si el historial excede ese máximo, se detiene y no genera una respuesta parcial.
-- Antes de habilitar el servicio, probar con cuentas de prueba y registros ficticios, verificar los resultados de la RPC y revisar consumo/costos del proveedor.
+La versión actual todavía carga el historial autorizado en memoria y realiza coincidencia léxica en la Edge Function. Para bases muy grandes, el siguiente paso será mover búsqueda y agregaciones a PostgreSQL para evitar recorrer y cargar todos los expedientes en cada consulta.
+
+## Estado
+
+Este código no despliega nada ni activa Gemini. Las dos opciones de configuración deben permanecer apagadas hasta completar pruebas con casos ficticios, revisión de privacidad, límites y costos.
