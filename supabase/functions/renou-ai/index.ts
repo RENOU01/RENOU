@@ -56,21 +56,8 @@ function scoreCase(row: Record<string, unknown>, terms: string[]): number {
     "ubicacion_ciudad", "D1", "D2", "D3", "D4", "D5",
     "E1", "E2", "E3", "F1", "F3",
   ];
-  const haystack = fields.map((key) => normalize(row[key])).join(" ").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("es");
+  const haystack = fields.map((key) => normalize(row[key])).join(" ").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es");
   return terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
-}
-
-function summarize(rows: Record<string, unknown>[]) {
-  const byYear: Record<string, number> = {};
-  const byType: Record<string, number> = {};
-  for (const row of rows) {
-    const date = normalize(row.fecha);
-    const year = /^\d{4}/.test(date) ? date.slice(0, 4) : "Sin fecha";
-    byYear[year] = (byYear[year] || 0) + 1;
-    const type = normalize(row.tipo) || "Sin tipo";
-    byType[type] = (byType[type] || 0) + 1;
-  }
-  return { total_casos_consultados: rows.length, casos_por_anio: byYear, casos_por_tipo: byType };
 }
 
 Deno.serve(async (req: Request) => {
@@ -175,7 +162,7 @@ Deno.serve(async (req: Request) => {
     const byYear: Record<string, number> = {};
     const byType: Record<string, number> = {};
     const terms = question.toLocaleLowerCase("es")
-      .normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3);
     const selected: { row: Record<string, unknown>; score: number }[] = [];
 
@@ -203,7 +190,7 @@ Deno.serve(async (req: Request) => {
 
       for (const row of batch) {
         const date = normalize(row.fecha);
-        const year = /^\\d{4}/.test(date) ? date.slice(0, 4) : "Sin fecha";
+        const year = /^\d{4}/.test(date) ? date.slice(0, 4) : "Sin fecha";
         byYear[year] = (byYear[year] || 0) + 1;
         const type = normalize(row.tipo) || "Sin tipo";
         byType[type] = (byType[type] || 0) + 1;
