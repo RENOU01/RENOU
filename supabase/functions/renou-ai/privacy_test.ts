@@ -1,4 +1,4 @@
-import { containsLikelyPersonalData, resolveAccessScope, sanitizeGeographicText } from "./privacy.ts";
+import { containsLikelyPersonalData, resolveAccessScope, resolveCasesUserId, sanitizeGeographicText } from "./privacy.ts";
 
 Deno.test("free text blocks common personal identifiers", () => {
   const blocked = [
@@ -52,4 +52,10 @@ Deno.test("geographic sanitization enforces the output length", () => {
 Deno.test("only active investigators receive research scope", () => {
   if (resolveAccessScope(true) !== "research") throw new Error("Investigador activo debe recibir alcance research");
   if (resolveAccessScope(false) !== "public") throw new Error("Usuario sin ficha activa debe conservar alcance público");
+});
+
+Deno.test("public scope never passes an authenticated non-investigator ID to the privileged cases RPC", () => {
+  if (resolveCasesUserId("public", "user-123") !== null) throw new Error("El alcance público debe enviar p_user_id null");
+  if (resolveCasesUserId("research", "investigator-123") !== "investigator-123") throw new Error("El investigador activo debe conservar su ID");
+  if (resolveCasesUserId("research", null) !== null) throw new Error("No debe inventarse un ID de investigador");
 });
