@@ -258,6 +258,7 @@ Deno.serve(async (req: Request) => {
     const geminiController = new AbortController();
     const geminiTimeout = setTimeout(() => geminiController.abort(), 20_000);
     let geminiResponse: Response;
+    let geminiData: unknown;
     try {
       geminiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,
@@ -275,6 +276,8 @@ Deno.serve(async (req: Request) => {
           }),
         },
       );
+      // El temporizador también cubre la lectura del cuerpo de la respuesta.
+      geminiData = await geminiResponse.json();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         return json(504, { error: "El proveedor de IA superó el tiempo máximo de respuesta." }, origin);
@@ -283,8 +286,6 @@ Deno.serve(async (req: Request) => {
     } finally {
       clearTimeout(geminiTimeout);
     }
-
-    const geminiData = await geminiResponse.json();
     if (!geminiResponse.ok) {
       return json(502, { error: "El proveedor de IA no pudo procesar la consulta.", provider_status: geminiResponse.status }, origin);
     }
