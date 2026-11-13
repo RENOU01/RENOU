@@ -1,7 +1,7 @@
 -- RENOU AI: paginación por cursor estable (keyset)
 -- Ejecutar en Supabase SQL Editor antes de desplegar la Edge Function.
 -- No modifica RLS ni permisos de las tablas originales.
--- Cursor por id (clave primaria textual): evita OFFSET y no tiene techo de 100.000.
+-- Cursor por id (clave primaria textual): evita OFFSET y no tiene techo fijo.
 
 begin;
 
@@ -47,7 +47,6 @@ begin
 
   with candidates as (
     select
-      row_number() over (order by a.id asc) as rn,
       a.id,
       jsonb_strip_nulls(jsonb_build_object(
         'id', a.id,
@@ -81,20 +80,21 @@ begin
     limit p_limit + 1
   ),
   page as (
-    select rn, id, case_data
+    select id, case_data
     from candidates
-    where rn <= p_limit
+    order by id asc
+    limit p_limit
   )
   select jsonb_build_object(
     'cases',
       coalesce(
-        (select jsonb_agg(page.case_data order by page.rn) from page),
+        (select jsonb_agg(page.case_data order by page.id) from page),
         '[]'::jsonb
       ),
     'has_more',
       (select count(*) > p_limit from candidates),
     'next_id',
-      (select page.id from page order by page.rn desc limit 1)
+      (select page.id from page order by page.id desc limit 1)
   )
   into v_result;
 
