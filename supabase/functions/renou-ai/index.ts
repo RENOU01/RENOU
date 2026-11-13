@@ -113,12 +113,26 @@ Deno.serve(async (req: Request) => {
       const { data: authData, error: authError } = await authClient.auth.getUser(match[1]);
       if (authError || !authData.user) return json(401, { error: "La sesión no es válida." }, origin);
       userId = authData.user.id;
-      scope = "research";
     }
 
     const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+
+    // Un JWT válido no convierte por sí solo a una persona en investigador.
+    // Usuarios autenticados sin ficha activa conservan únicamente el alcance público.
+    if (userId) {
+      const { data: investigator, error: investigatorError } = await admin
+        .from("investigadores")
+        .select("id,activo")
+        .eq("id", userId)
+        .eq("activo", true)
+        .maybeSingle();
+      if (investigatorError) {
+        return json(503, { error: "No se pudo verificar el estado de la cuenta investigadora." }, origin);
+      }
+      if (investigator) scope = "research";
+    }
 
     const { data: config, error: configError } = await admin
       .from("renou_ai_config")
@@ -131,19 +145,8 @@ Deno.serve(async (req: Request) => {
       return json(403, { error: "La IA pública está desactivada." }, origin);
     }
 
-    if (scope === "research") {
-      if (config.enabled_research !== true) {
-        return json(403, { error: "La IA para investigadores está desactivada." }, origin);
-      }
-      const { data: investigator, error: investigatorError } = await admin
-        .from("investigadores")
-        .select("id,activo")
-        .eq("id", userId)
-        .eq("activo", true)
-        .maybeSingle();
-      if (investigatorError || !investigator) {
-        return json(403, { error: "Se requiere una cuenta de investigador activa." }, origin);
-      }
+    if (scope === "research" && config.enabled_research !== true) {
+      return json(403, { error: "La IA para investigadores está desactivada." }, origin);
     }
 
     // El límite se aplica con una ventana persistente en PostgreSQL.
