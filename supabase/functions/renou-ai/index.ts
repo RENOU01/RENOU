@@ -110,7 +110,7 @@ Deno.serve(async (req: Request) => {
         auth: { persistSession: false, autoRefreshToken: false },
         global: { headers: { Authorization: authHeader } },
       });
-      const { data: authData, error: authError } = await authClient.auth.getUser();
+      const { data: authData, error: authError } = await authClient.auth.getUser(match[1]);
       if (authError || !authData.user) return json(401, { error: "La sesión no es válida." }, origin);
       userId = authData.user.id;
       scope = "research";
