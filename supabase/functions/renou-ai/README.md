@@ -10,6 +10,7 @@
 - No devuelve expedientes al navegador; devuelve únicamente respuesta y contadores.
 - La RPC no selecciona nombres, correos, teléfonos, identidad de personas, dirección aproximada (`C4dir`), detalle libre del sonido (`D5d`) ni metadatos administrativos. Los campos de ubicación incluidos (`C4p`, `C4d`, `C4c`) describen país, departamento y ciudad del caso; son texto aportado en el formulario y deben seguir considerándose datos no confiables, no identidad verificada.
 - La clave Gemini se obtiene de `GEMINI_API_KEY`, como secreto de Supabase.
+- Antes de enviar a Gemini, país, departamento y ciudad pasan por normalización, límite de longitud y filtros básicos de correo/teléfono. Es una defensa adicional, no una garantía de anonimización; no se envían dirección aproximada ni campos libres excluidos por la RPC.
 
 ## Requisitos previos
 
@@ -39,7 +40,7 @@ La llamada al proveedor Gemini tiene un tiempo máximo de 20 segundos, incluida 
 
 La función de control horario depura como máximo 500 registros vencidos por consulta, usando un índice por `updated_at`, para evitar un borrado masivo en cada petición.
 
-El límite público usa `cf-connecting-ip` o `x-real-ip` si están presentes; si no, utiliza un único grupo compartido. Antes de producción debe verificarse que esos encabezados sean establecidos y sobrescritos por la infraestructura de Supabase y no aceptados directamente del cliente. CORS no evita llamadas desde clientes no navegador y no es una defensa contra abuso.
+El límite público usa únicamente `cf-connecting-ip`, encabezado que la plataforma Supabase establece para las solicitudes; si no está presente, utiliza un único grupo compartido. No se confía en `x-real-ip`. La documentación de Supabase identifica `cf-connecting-ip` como encabezado establecido por la plataforma. CORS no evita llamadas desde clientes no navegador y no es una defensa contra abuso.
 
 La coincidencia de casos es léxica inicial, no búsqueda semántica.
 
