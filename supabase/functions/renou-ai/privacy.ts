@@ -28,3 +28,8 @@ export function containsLikelyPersonalData(value: string): boolean {
   const identifiedPerson = /\b(?:[Tt]estigo|[Dd]enunciante|[Rr]eportante|[Ii]nvestigador(?:a)?|[Ss]eñor|[Ss]eñora|[Ss]r\.?|[Ss]ra\.?)(?:\s*[:：]\s*(?:(?:llamado|de nombre|identificado como)\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}|\s+(?:(?:llamado|de nombre|identificado como)\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)?))\b/u;
   return email.test(value) || phone.test(value) || uruguayId.test(value) || identifiedPerson.test(value);
 }
+
+// Solo una ficha de investigador activa concede el alcance ampliado.
+export function resolveAccessScope(isActiveInvestigator: boolean): "public" | "research" {
+  return isActiveInvestigator ? "research" : "public";
+}
