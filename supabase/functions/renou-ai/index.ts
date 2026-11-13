@@ -252,6 +252,10 @@ Deno.serve(async (req: Request) => {
       "Si la consulta requiere detalles que no aparecen en el contexto, dilo claramente.",
       "El resumen estadístico corresponde al historial completo autorizado; los casos detallados son una selección de coincidencias.",
       "No solicites ni intentes inferir identidades personales.",
+      "Puedes utilizar país, departamento y ciudad registrados en cada caso para análisis geográficos agregados y comparaciones territoriales.",
+      "Trata los nombres de lugares como texto declarado en el registro, no como ubicación verificada ni como domicilio de una persona.",
+      "No intentes identificar, localizar ni deducir la identidad de denunciantes, testigos o investigadores a partir de la información geográfica.",
+      "Distingue patrones o concentraciones observadas de cualquier explicación causal; no afirmes causalidad por coincidencia geográfica.",
     ].join("\n");
 
     // Evita que una espera indefinida del proveedor agote el tiempo de la Edge Function.
