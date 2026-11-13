@@ -1,4 +1,4 @@
-import { containsLikelyPersonalData, sanitizeGeographicText } from "./privacy.ts";
+import { containsLikelyPersonalData, resolveAccessScope, sanitizeGeographicText } from "./privacy.ts";
 
 Deno.test("free text blocks common personal identifiers", () => {
   const blocked = [
@@ -47,4 +47,9 @@ Deno.test("geographic sanitization preserves dates, RENOU IDs and place names", 
 Deno.test("geographic sanitization enforces the output length", () => {
   const sanitized = sanitizeGeographicText("Canelones".repeat(30), 40);
   if (sanitized.length > 40) throw new Error("No se respetó el límite de longitud");
+});
+
+Deno.test("only active investigators receive research scope", () => {
+  if (resolveAccessScope(true) !== "research") throw new Error("Investigador activo debe recibir alcance research");
+  if (resolveAccessScope(false) !== "public") throw new Error("Usuario sin ficha activa debe conservar alcance público");
 });
