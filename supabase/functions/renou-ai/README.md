@@ -37,6 +37,8 @@ Si no puede completar el recorrido dentro del tiempo máximo preventivo, devuelv
 
 La llamada al proveedor Gemini tiene un tiempo máximo de 20 segundos, incluida la lectura de su respuesta. El cuerpo de la solicitud entrante se limita a 8 KiB medidos en bytes.
 
+La función de control horario depura como máximo 500 registros vencidos por consulta, usando un índice por `updated_at`, para evitar un borrado masivo en cada petición.
+
 El límite público usa `cf-connecting-ip` o `x-real-ip` si están presentes; si no, utiliza un único grupo compartido. Antes de producción debe verificarse que esos encabezados sean establecidos y sobrescritos por la infraestructura de Supabase y no aceptados directamente del cliente. CORS no evita llamadas desde clientes no navegador y no es una defensa contra abuso.
 
 La coincidencia de casos es léxica inicial, no búsqueda semántica.
