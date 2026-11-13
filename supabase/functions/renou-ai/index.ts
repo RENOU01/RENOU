@@ -52,12 +52,20 @@ function normalize(value: unknown): string {
 function sanitizeGeographicText(value: unknown, maxLength = 100): string {
   return normalize(value)
     .normalize("NFC")
-    .replace(/[\\r\\n\\t]+/g, " ")
-    .replace(/\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b/gi, "[dato omitido]")
-    .replace(/(?:\\+?\\d[\\d\\s().-]{7,}\\d)/g, "[dato omitido]")
-    .replace(/\\s+/g, " ")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[dato omitido]")
+    .replace(/(?:\+?\d[\d\s().-]{7,}\d)/g, "[dato omitido]")
+    .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+}
+
+function containsLikelyPersonalData(value: string): boolean {
+  const email = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+  const phone = /(?:\+?\d[\d\s().-]{7,}\d)/;
+  const uruguayId = /\b\d{1,2}\.?\d{3}\.?\d{3}-?\d\b/;
+  const identifiedPerson = /\b(?:testigo|denunciante|reportante|investigador(?:a)?|persona|señor|señora|sr\.?|sra\.?)\s+(?:llamado\s+|de nombre\s+)?[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){0,2}\b/i;
+  return email.test(value) || phone.test(value) || uruguayId.test(value) || identifiedPerson.test(value);
 }
 
 function scoreCase(row: Record<string, unknown>, terms: string[]): number {
@@ -101,6 +109,11 @@ Deno.serve(async (req: Request) => {
     const question = typeof body.question === "string" ? body.question.trim() : "";
     if (!question || question.length > MAX_QUESTION_CHARS) {
       return json(400, { error: "La consulta debe tener entre 1 y 2000 caracteres." }, origin);
+    }
+    if (containsLikelyPersonalData(question)) {
+      return json(400, {
+        error: "La consulta parece contener datos personales. Eliminá nombres de personas, correos, teléfonos y documentos; consultá únicamente por hechos o ubicaciones del caso.",
+      }, origin);
     }
 
     const authHeader = req.headers.get("authorization") || "";
