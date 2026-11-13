@@ -258,7 +258,11 @@ Deno.serve(async (req: Request) => {
     const geminiController = new AbortController();
     const geminiTimeout = setTimeout(() => geminiController.abort(), 20_000);
     let geminiResponse: Response;
-    let geminiData: unknown;
+    let geminiData: {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+      }>;
+    } | null;
     try {
       geminiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent`,
