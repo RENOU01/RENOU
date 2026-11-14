@@ -1,0 +1,37 @@
+name: RENOU AI checks
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "supabase/functions/renou-ai/**"
+      - ".github/workflows/renou-ai-tests.yml"
+  push:
+    branches:
+      - feature/renou-ai-edge-function
+    paths:
+      - "supabase/functions/renou-ai/**"
+      - ".github/workflows/renou-ai-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  privacy-tests:
+    name: Check RENOU AI modules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Type check
+        run: deno check supabase/functions/renou-ai/index.ts supabase/functions/renou-ai/privacy_test.ts supabase/functions/renou-ai/geospatial_test.ts
+
+      - name: Run privacy tests
+        run: deno test supabase/functions/renou-ai/privacy_test.ts supabase/functions/renou-ai/geospatial_test.ts
