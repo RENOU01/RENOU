@@ -1,4 +1,4 @@
-name: RENOU AI privacy tests
+name: RENOU AI checks
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   privacy-tests:
-    name: Check RENOU AI privacy module
+    name: Check RENOU AI modules
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -31,7 +31,7 @@ jobs:
           deno-version: v2.x
 
       - name: Type check
-        run: deno check supabase/functions/renou-ai/index.ts supabase/functions/renou-ai/privacy_test.ts
+        run: deno check supabase/functions/renou-ai/index.ts supabase/functions/renou-ai/privacy_test.ts supabase/functions/renou-ai/geospatial_test.ts
 
       - name: Run privacy tests
-        run: deno test supabase/functions/renou-ai/privacy_test.ts
+        run: deno test supabase/functions/renou-ai/privacy_test.ts supabase/functions/renou-ai/geospatial_test.ts
