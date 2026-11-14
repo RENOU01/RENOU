@@ -5,6 +5,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { containsLikelyPersonalData, resolveAccessScope, resolveCasesUserId, sanitizeGeographicText } from "./privacy.ts";
+import { GeospatialAnalyzer } from "./geospatial.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -189,6 +190,7 @@ Deno.serve(async (req: Request) => {
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .split(/[^a-z0-9]+/).filter((t: string) => t.length >= 3);
     const selected: { row: Record<string, unknown>; score: number }[] = [];
+    const geospatial = new GeospatialAnalyzer();
 
     while (hasMore) {
       if (Date.now() - scanStartedAt > MAX_HISTORY_SCAN_MS) {
@@ -213,6 +215,7 @@ Deno.serve(async (req: Request) => {
       totalCases += batch.length;
 
       for (const row of batch) {
+        geospatial.add(row.id, row.latitud, row.longitud, row.fecha);
         const date = normalize(row.fecha);
         const year = /^\d{4}/.test(date) ? date.slice(0, 4) : "Sin fecha";
         byYear[year] = (byYear[year] || 0) + 1;
@@ -249,6 +252,7 @@ Deno.serve(async (req: Request) => {
     const context = {
       alcance: scope === "public" ? "Solo casos publicados" : "Casos publicados y no publicados",
       resumen_del_historial: historySummary,
+      analisis_geoespacial: geospatial.summary(),
       casos_relevantes: selected.map((item) => ({
         ...item.row,
         ubicacion_textual: sanitizeGeographicText(item.row.ubicacion_textual),
@@ -269,6 +273,10 @@ Deno.serve(async (req: Request) => {
       "El resumen estadístico corresponde al historial completo autorizado; los casos detallados son una selección de coincidencias.",
       "No solicites ni intentes inferir identidades personales.",
       "Puedes utilizar país, departamento y ciudad registrados en cada caso para análisis geográficos agregados y comparaciones territoriales.",
+      "El contexto incluye un análisis geoespacial calculado sobre todos los casos autorizados recorridos, no solo sobre los casos detallados seleccionados.",
+      "Las coordenadas latitud y longitud se conservan con toda la precisión numérica almacenada en RENOU; no las redondees ni supongas una precisión adicional.",
+      "Utiliza los conteos de pares cercanos y sus identificadores para analizar proximidad a menos de 1, 5, 10 y 25 km. Los ejemplos de pares son una muestra de los pares más cercanos, no la totalidad.",
+      "Cuando la consulta pregunte por distancias o concentraciones, basa la respuesta en las métricas geoespaciales del contexto y cita los identificadores RENOU disponibles.",
       "Trata los nombres de lugares como texto declarado en el registro, no como ubicación verificada ni como domicilio de una persona.",
       "No intentes identificar, localizar ni deducir la identidad de denunciantes, testigos o investigadores a partir de la información geográfica.",
       "Distingue patrones o concentraciones observadas de cualquier explicación causal; no afirmes causalidad por coincidencia geográfica.",
