@@ -47,3 +47,15 @@ La coincidencia de casos es léxica inicial, no búsqueda semántica.
 ## Estado
 
 Este código no despliega nada ni activa Gemini. Las dos opciones de configuración deben permanecer apagadas hasta completar pruebas con casos ficticios, revisión de privacidad, límites y costos.
+
+
+## Análisis geoespacial y precisión de coordenadas
+
+- La RPC entrega latitud y longitud como valores numéricos originales, sin redondeo ni truncamiento.
+- La Edge Function conserva esos valores y ejecuta el análisis de proximidad sobre todos los casos autorizados recorridos, no únicamente sobre los 35 casos seleccionados para detalle textual.
+- El módulo geoespacial calcula distancias Haversine y cuenta pares a menos de 1, 5, 10 y 25 km. Incluye una muestra de hasta 12 pares más cercanos dentro de 5 km, con identificadores RENOU y fechas disponibles.
+- Los pares son coincidencias de proximidad entre ubicaciones de incidentes; no prueban causalidad ni deben utilizarse para identificar denunciantes, testigos o investigadores.
+- Los casos sin coordenadas y las coordenadas fuera de rango se contabilizan por separado.
+- El cálculo se ejecuta en memoria durante el recorrido paginado. Antes de habilitar el servicio con un historial grande, se debe medir consumo de memoria y duración; si el volumen lo exige, trasladar los agregados geoespaciales a PostgreSQL sin cambiar el alcance de acceso.
+
+Para actualizar una base donde ya se ejecutó la RPC anterior, ejecutar una sola vez sql/renou_ai_geospatial_precision.sql. Este SQL reemplaza únicamente el cuerpo de la RPC existente para devolver la precisión completa; no cambia RLS, privilegios ni tablas operativas.
